@@ -1,27 +1,32 @@
 # certpost
 
-Let's Encrypt certificate manager with DNS-01 via Cloudflare and API access.
+Let's Encrypt certificate manager with DNS-01 via Cloudflare, web admin panel, and TLS termination proxy.
 
 ## Why?
 
-Managing SSL certificates across multiple services is tedious — requesting certs, setting DNS records, renewing before expiry, distributing updated certs. certpost automates the entire lifecycle: it issues Let's Encrypt certificates using DNS-01 challenges via the Cloudflare API, renews them automatically, and provides an API for other services to fetch their certificates.
+Managing SSL certificates across multiple services is tedious — requesting certs, setting DNS records, renewing before expiry, distributing updated certs to each server. certpost automates the entire lifecycle:
+
+1. **certpost-server** issues Let's Encrypt certificates using DNS-01 challenges via Cloudflare, creates A records, renews automatically, and provides an API for retrieving certs.
+2. **certpost** (the client) either fetches cert files for use with nginx/haproxy/etc., or runs a TLS termination proxy that handles everything — cert fetching, TLS termination with SNI routing, and automatic refresh.
 
 ## Features
 
-- **Web admin panel** — manage subdomains, API tokens, and configuration from your browser
-- **Automatic issuance** — ACME v2 with DNS-01 challenges via the Cloudflare API
-- **Background renewal** — checks daily, renews certificates within 30 days of expiry
-- **Certificate API** — bearer token authenticated endpoint for retrieving cert, chain, and key
-- **Client tool** — `certpost` fetches certificates from the server and saves PEM files locally
-- **Polling mode** — client can poll on an interval to pick up renewed certificates
-- **Zero dependencies** — stdlib only, shells out to system `openssl` for crypto
-- **Simple storage** — JSON files in `~/.certpost/`, no database required
+- **Automatic issuance** — ACME v2 with DNS-01 challenges, no port 80 required
+- **DNS management** — creates and manages Cloudflare A records alongside certificates
+- **Web admin panel** — manage domains, view status/logs, download certs (protected by admin key)
+- **Background renewal** — checks daily, renews within 30 days of expiry
+- **Per-domain tokens** — each domain gets its own API token (auto-generated, rotatable)
+- **TLS termination proxy** — built-in proxy with SNI routing and automatic cert refresh
+- **Certificate fetch** — save `.crt` and `.key` files, with optional scheduled refresh
+- **Interactive setup** — wizards for both server and client configuration
+- **Zero dependencies** — stdlib only, shells out to system `openssl`
+- **Modular DNS** — Cloudflare implemented, protocol-based design for other providers
 
 ## Requirements
 
 - Python 3.12+
 - System `openssl` binary (available on macOS and Linux)
-- Cloudflare account with a DNS zone and API token
+- Cloudflare account with a DNS zone and API token (free tier works)
 
 ## Quick Start
 
@@ -31,37 +36,42 @@ Managing SSL certificates across multiple services is tedious — requesting cer
 pip install certpost
 ```
 
-Or run directly with uv:
+### Set up the server
 
 ```bash
-uvx certpost-server
+certpost-server setup -d /var/lib/certpost
+certpost-server run -d /var/lib/certpost
 ```
 
-### Start the server
+The setup wizard prompts for your Cloudflare API token, zone ID, and base domain. Open `http://localhost:8443` and log in with the admin key (printed on startup).
+
+### Add a domain
+
+In the admin panel, enter a subdomain and IP address. certpost will:
+
+1. Create an A record in Cloudflare
+2. Issue a Let's Encrypt certificate via DNS-01
+3. Generate a per-domain API token
+
+### Use the certificates
+
+**Option A — Fetch files** for nginx, haproxy, etc.:
 
 ```bash
-certpost-server --port 8443
+certpost fetch -s http://certpost:8443 -t <token> -d app.example.com -o /etc/ssl/certs
 ```
 
-Then open [http://localhost:8443](http://localhost:8443) to access the admin panel.
-
-1. Go to the **Configuration** tab and enter your Cloudflare API token, zone ID, base domain, and ACME email
-2. Go to the **Domains** tab and add a subdomain — certificate issuance starts automatically
-3. Go to the **API Tokens** tab and create a token for your client services
-
-### Fetch certificates with the client
+**Option B — TLS proxy** (all-in-one, auto-refreshes):
 
 ```bash
-certpost --server http://certpost.example.com:8443 \
-         --token YOUR_TOKEN \
-         --domain app.example.com \
-         --output-dir /etc/ssl/certs
+certpost init         # Generate proxy config interactively
+certpost proxy -c certpost.json
 ```
 
 See the [Usage](usage.md) page for full details.
 
 ## How It Works
 
-certpost-server runs an HTTP server with a web admin panel and a certificate retrieval API. When you add a subdomain, a background thread handles the ACME v2 flow: it generates keys and a CSR using system `openssl`, creates a DNS-01 challenge by setting a TXT record via the Cloudflare API, validates with Let's Encrypt, and stores the resulting certificate. A renewal thread checks daily and re-issues certificates approaching expiry.
+certpost-server runs an HTTP server with a web admin panel and certificate retrieval API. When you add a subdomain, a background thread creates an A record in Cloudflare, then handles the ACME v2 flow: generates keys and a CSR using system `openssl`, sets a `_acme-challenge` TXT record via Cloudflare, validates with Let's Encrypt, and stores the certificate. A renewal thread checks daily and re-issues certificates approaching expiry.
 
-The client tool (`certpost`) authenticates with a bearer token, fetches the certificate data from the API, and saves it as PEM files locally. It can run once or poll on an interval to automatically pick up renewed certificates.
+The client (`certpost proxy`) fetches certificates from the server using per-domain bearer tokens, loads them into an SSL context (temp files are deleted immediately after loading), and terminates TLS using SNI to pick the right certificate for each incoming connection. Plaintext traffic is forwarded to the configured backend. Certificates are refreshed automatically on a configurable interval (default 24 hours).

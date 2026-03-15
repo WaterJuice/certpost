@@ -4,7 +4,10 @@ This file provides guidance for AI agents working on this project.
 
 ## Project Overview
 
-certpost is a Let's Encrypt certificate manager service. It provides a web admin panel for managing subdomains and API tokens, automatically issues and renews certificates using DNS-01 challenges via the Cloudflare API, and exposes an API for other services to retrieve certificates. The client tool (`certpost`) fetches certificates from the server and saves them locally; the server runs as `certpost-server`.
+certpost is a Let's Encrypt certificate manager. It has two components:
+
+- **certpost-server** — issues and renews SSL certificates via Let's Encrypt (ACME v2 with DNS-01 challenges via Cloudflare), manages DNS A records, and provides a web admin panel and API for certificate retrieval.
+- **certpost** — client tool that fetches certificates from a certpost server. Can save them as files (`fetch`) or run a TLS termination proxy with SNI routing and automatic certificate refresh (`proxy`).
 
 **Zero pip dependencies** — stdlib only plus system `openssl`. No asyncio; uses threading.
 
@@ -66,6 +69,8 @@ def my_function() -> None:
 - Run `make format` to auto-fix import ordering
 - **No external dependencies** — stdlib only, shell out to `openssl` for crypto
 - CLI uses argbuilder.py (custom argparse wrapper)
+- Tokens use lowercase alphanumeric characters only (a-z, 0-9), 40 chars
+- Timestamps use ISO 8601 format, not Unix epoch floats
 
 ## Common Commands
 
@@ -87,52 +92,87 @@ certpost/
 ├── __main__.py       # Entry point for python -m certpost
 ├── version.py        # Version string handling
 ├── argbuilder.py     # Custom argparse wrapper
-├── cli.py            # Server CLI (certpost-server)
-├── client_cli.py     # Client CLI (certpost)
-├── server.py         # HTTP server (admin panel + cert API)
+├── cli.py            # Server CLI (certpost-server) — run and setup commands
+├── client_cli.py     # Client CLI (certpost) — fetch, proxy, and init commands
+├── client_fetch.py   # Certificate fetching and saving logic (shared by client and proxy)
+├── server.py         # HTTP server (admin panel + cert API + info endpoints)
+├── proxy.py          # TLS termination proxy with SNI routing and auto-refresh
 ├── acme.py           # ACME v2 client (Let's Encrypt) using urllib + openssl
-├── cloudflare.py      # Cloudflare DNS API client (for DNS-01 challenges)
-├── storage.py        # JSON file storage (~/.certpost/)
+├── cloudflare.py     # Cloudflare DNS API client (A records + TXT records)
+├── dns.py            # DNS provider protocol (interface for swapping providers)
+├── storage.py        # JSON file storage for config, domains, certs
 ├── crypto.py         # OpenSSL subprocess wrappers (key gen, CSR, JWS)
 ├── renewal.py        # Background certificate renewal thread
+├── log.py            # In-memory log buffer (ring buffer, also prints to stderr)
 └── web/
-    └── index.html    # Admin panel (embedded CSS/JS)
+    └── index.html    # Admin panel (embedded CSS/JS, dark theme)
 ```
 
 ## Architecture
 
 ### Server (`certpost-server`)
+
+Two subcommands: `run` and `setup`. Both require `--data-dir` (no default location).
+
+- `setup` — interactive wizard to create config.json
+- `run` — starts the HTTP server, requires config.json to exist
+
+Server features:
 - Uses stdlib `http.server` for HTTP serving (threaded)
-- Admin panel at `/` for managing subdomains and API tokens
-- Cert retrieval API at `/api/cert/<subdomain>` authenticated by bearer token
+- Admin panel at `/` protected by admin key login with session cookies
+- Per-domain API tokens (auto-generated when adding a domain, visible, rotatable)
+- Cert retrieval API at `/api/cert/<domain>` authenticated by per-domain bearer token
+- Creates Cloudflare A records when adding domains, removes them when deleting
 - Background renewal thread checks daily, renews certs within 30 days of expiry
-- Storage in `~/.certpost/` as JSON files
-- Thread safety via `threading.Lock` on file writes and Cloudflare API calls
+- In-memory log buffer viewable in admin panel Logs tab
+- Info endpoints: `/api/version`, `/api/spec` (OpenAPI 3.0), `/api/help` (plain text)
+- `/api/token-info` — resolves a bearer token to its domain
+
+### DNS Provider
+
+- `dns.py` defines a `DnsProvider` protocol with `set_txt_record`, `remove_txt_record`, `set_a_record`, `remove_a_record`
+- `cloudflare.py` implements this protocol
+- Easy to add other providers by implementing the protocol
 
 ### ACME / Let's Encrypt
+
 - Implements ACME v2 protocol using `urllib.request`
-- DNS-01 challenge: sets `_acme-challenge.<fqdn>` TXT record via Cloudflare API
+- Let's Encrypt directory URL is hardcoded (no config needed)
+- DNS-01 challenge: sets `_acme-challenge.<fqdn>` TXT record via DNS provider
 - Crypto operations (key gen, CSR, JWS signing) via system `openssl` subprocess
-- Cloudflare `setHosts` replaces all records — always fetch existing before writing
+- No email registration with Let's Encrypt
 
 ### Client (`certpost`)
-- Simple tool to fetch certificates from a certpost server
-- Configured with server URL and bearer token
-- Saves cert, chain, and key PEM files locally
-- Can run once or poll on an interval
+
+Three subcommands: `fetch`, `proxy`, `init`. No command shows help.
+
+- `fetch` — downloads cert as `<domain>.crt` and `<domain>.key` files. Supports `--refresh` for periodic re-fetching. Can use CLI args or a JSON config file.
+- `proxy` — TLS termination proxy. Fetches certs from server, terminates TLS with SNI routing, forwards plaintext to backends. Auto-refreshes certs (default 24h). Requires JSON config file.
+- `init` — interactive wizard to generate a fetch or proxy config file. Resolves domains from tokens via `/api/token-info` and validates against the server.
+
+### Storage
+
+- All data in a user-specified directory (`--data-dir`, no default)
+- `config.json` — Cloudflare credentials, base domain, admin key, port
+- `domains.json` — managed domains with status, IP, per-domain API tokens
+- `certs/<domain>/cert.json` — certificate PEM data with ISO timestamps
+- `acme_account.json` — ACME account key and registration URL
+- Admin sessions stored in config.json
 
 ### Auth
-- Bearer tokens for API access
-- Tokens stored as SHA-256 hashes (via `hashlib`)
-- Admin panel manages token creation/revocation
+
+- Admin panel: login with admin key, session cookie (optional "remember me" for persistence)
+- Cert API: per-domain bearer tokens (generated on domain creation, rotatable)
 
 ## Testing Changes
 
 After making changes:
 1. Run `make check` to verify linting and types pass
 2. Run `make build` to verify the full build works
-3. Test server with `uv run certpost-server`
-4. Test client with `uv run certpost`
+3. Test server with `uv run certpost-server run -d <dir>`
+4. Test client with `uv run certpost fetch ...` or `uv run certpost proxy -c <config>`
+
+**Important:** The server does not hot-reload. Always restart after code changes.
 
 ## Versioning
 
