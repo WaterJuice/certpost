@@ -267,13 +267,17 @@ def _build_proxy_config(server: str) -> JsonDict:
     refresh_hours = int(refresh_str) if refresh_str.isdigit() else 24
 
     routes: dict[str, JsonDict] = {}
-    print("\nAdd routes (domain -> backend). Enter empty domain to finish.\n")
+    print("\nAdd routes (domain -> backend). Enter empty domain when done.\n")
     while True:
-        domain = _prompt("Domain (e.g. app.example.com)")
+        domain = _prompt("Domain FQDN (e.g. app.example.com)")
         if not domain:
             break
         token = _prompt(f"  API token for {domain}")
-        backend = _prompt(f"  Backend address for {domain} (e.g. 127.0.0.1:8080)")
+        while True:
+            backend = _prompt(f"  Backend address for {domain} (e.g. 127.0.0.1:8080)")
+            if backend:
+                break
+            print("  Backend address is required.")
         routes[domain] = {"token": token, "backend": backend}
         print()
 
