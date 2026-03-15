@@ -64,7 +64,7 @@ def _create_parser() -> ArgsParser:
     """Build the argument parser with subcommands."""
     parser = ArgsParser(
         prog="certpost",
-        description="Fetch certificates from a certpost server.",
+        description="Certificate client — fetch certs as files, run a TLS termination proxy, or generate a config. Use 'certpost <command> -h' for details on each command.",
         version=f"certpost: {VERSION_STR}\npython: {sys.version.split()[0]}",
     )
 
