@@ -75,9 +75,25 @@ def _create_parser() -> ArgsParser:
         help="Show licence information and exit",
     )
 
-    # 'fetch' command — one-shot or recurring cert fetch
+    # 'fetch' command
     fetch_cmd = parser.add_command(
-        "fetch", help="Fetch certificates and save as PEM files"
+        "fetch",
+        help="Fetch certificates and save as .crt/.key files",
+        description=(
+            "Download certificates from a certpost server and save them as\n"
+            "<domain>.crt and <domain>.key files. Use --refresh to keep fetching\n"
+            "on a schedule (e.g. every 24 hours) so renewed certs are picked up\n"
+            "automatically.\n"
+            "\n"
+            "Options can be provided via CLI flags or a JSON config file (--config).\n"
+            "\n"
+            "Config file format:\n"
+            '  { "server": "http://certpost:8443",\n'
+            '    "domain": "app.example.com",\n'
+            '    "token": "your-api-token",\n'
+            '    "output_dir": "/etc/ssl/certs",\n'
+            '    "refresh_hours": 24 }'
+        ),
     )
     fetch_cmd.add_argument(
         "--server",
@@ -91,14 +107,14 @@ def _create_parser() -> ArgsParser:
         "-t",
         type=str,
         metavar="TOKEN",
-        help="Bearer token for authentication",
+        help="API token for the domain (from the certpost admin panel)",
     )
     fetch_cmd.add_argument(
         "--domain",
         "-d",
         type=str,
         metavar="FQDN",
-        help="Domain to fetch certificate for",
+        help="Domain to fetch certificate for (e.g. app.example.com)",
     )
     fetch_cmd.add_argument(
         "--output-dir",
@@ -113,7 +129,7 @@ def _create_parser() -> ArgsParser:
         type=int,
         default=0,
         metavar="HOURS",
-        help="Refresh interval in hours (0 = fetch once, default: 0)",
+        help="Re-fetch interval in hours; 0 = fetch once and exit (default: 0)",
     )
     fetch_cmd.add_argument(
         "--config",
@@ -121,11 +137,19 @@ def _create_parser() -> ArgsParser:
         type=str,
         default="",
         metavar="FILE",
-        help="Config file (JSON) instead of CLI args",
+        help="JSON config file (alternative to CLI flags; see above for format)",
     )
 
-    # 'init' command — generate a config file
-    init_cmd = parser.add_command("init", help="Generate a config file interactively")
+    # 'init' command
+    init_cmd = parser.add_command(
+        "init",
+        help="Generate a config file interactively",
+        description=(
+            "Interactive wizard to create a certpost JSON config file.\n"
+            "Generates either a fetch config or a proxy config.\n"
+            "Run 'certpost init' and follow the prompts."
+        ),
+    )
     init_cmd.add_argument(
         "--output",
         "-o",
@@ -135,9 +159,29 @@ def _create_parser() -> ArgsParser:
         help="Output config file path (default: certpost.json)",
     )
 
-    # 'proxy' command — TLS termination proxy
+    # 'proxy' command
     proxy_cmd = parser.add_command(
-        "proxy", help="TLS termination proxy with SNI routing"
+        "proxy",
+        help="TLS termination proxy with auto-refreshing certs",
+        description=(
+            "Run a TLS termination proxy that fetches certificates from a\n"
+            "certpost server, terminates TLS using SNI to select the right\n"
+            "certificate, and forwards plaintext traffic to backend servers.\n"
+            "Certificates are refreshed automatically (default: every 24 hours).\n"
+            "\n"
+            "Requires a JSON config file. Use 'certpost init' to create one,\n"
+            "or write it manually:\n"
+            "\n"
+            '  { "server": "http://certpost:8443",\n'
+            '    "listen": "0.0.0.0:443",\n'
+            '    "refresh_hours": 24,\n'
+            '    "routes": {\n'
+            '      "app.example.com": {\n'
+            '        "token": "your-api-token",\n'
+            '        "backend": "127.0.0.1:8080"\n'
+            "      }\n"
+            "    } }"
+        ),
     )
     proxy_cmd.add_argument(
         "--config",
@@ -145,14 +189,14 @@ def _create_parser() -> ArgsParser:
         type=str,
         default="",
         metavar="FILE",
-        help="Config file (JSON) — required for proxy mode",
+        help="JSON config file (required; use 'certpost init' to create one)",
     )
     proxy_cmd.add_argument(
         "--listen",
         type=str,
         default="0.0.0.0:443",
         metavar="ADDR",
-        help="Listen address (default: 0.0.0.0:443)",
+        help="Listen address, overrides config (default: 0.0.0.0:443)",
     )
 
     return parser
