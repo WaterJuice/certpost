@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------------------
 
 import json
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -74,8 +73,10 @@ class AcmeClient:
 
     # ------------------------------------------------------------------------------------
     def _log(self, message: str) -> None:
-        """Log a message to stderr."""
-        print(f"  [acme] {message}", file=sys.stderr)
+        """Log a message."""
+        from .log import log
+
+        log("acme", message)
 
     # ------------------------------------------------------------------------------------
     def _fetch_directory(self) -> None:

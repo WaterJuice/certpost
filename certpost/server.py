@@ -30,6 +30,7 @@ from typing import Any
 from .acme import AcmeClient
 from .cloudflare import CloudflareClient
 from .dns import DnsProvider
+from .log import log as _log
 from .renewal import RenewalThread
 from .storage import Storage
 
@@ -282,6 +283,9 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         elif path == "/api/base-domain":
             if self._require_admin():
                 self._handle_get_base_domain()
+        elif path == "/api/logs":
+            if self._require_admin():
+                self._handle_get_logs()
         elif path == "/api/auth/check":
             self._handle_auth_check()
         else:
@@ -452,18 +456,12 @@ class _CertpostHandler(BaseHTTPRequestHandler):
                 # Create A record
                 assert cf is not None
                 cf.set_a_record(fqdn, ip_address)
-                print(
-                    f"  [server] A record created: {fqdn} -> {ip_address}",
-                    file=sys.stderr,
-                )
+                _log("server", f"A record created: {fqdn} -> {ip_address}")
                 # Issue certificate
                 acme.issue_certificate(fqdn)
             except Exception as e:
                 error_msg = f"{type(e).__name__}: {e}"
-                print(
-                    f"  [server] Setup failed for {fqdn}: {error_msg}",
-                    file=sys.stderr,
-                )
+                _log("server", f"Setup failed for {fqdn}: {error_msg}")
                 storage.update_domain(
                     fqdn, {"status": "error", "last_error": error_msg}
                 )
@@ -481,10 +479,7 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             try:
                 _dns_client.remove_a_record(subdomain)
             except Exception as e:
-                print(
-                    f"  [server] Failed to remove A record for {subdomain}: {e}",
-                    file=sys.stderr,
-                )
+                _log("server", f"Failed to remove A record for {subdomain}: {e}")
 
         _storage.remove_domain(subdomain)
         self._send_json({"status": "removed"})
@@ -508,10 +503,7 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         if _dns_client is not None:
             try:
                 _dns_client.set_a_record(subdomain, ip_address)
-                print(
-                    f"  [server] A record updated: {subdomain} -> {ip_address}",
-                    file=sys.stderr,
-                )
+                _log("server", f"A record updated: {subdomain} -> {ip_address}")
             except Exception as e:
                 self._send_error(500, f"Failed to update DNS: {e}")
                 return
@@ -530,6 +522,13 @@ class _CertpostHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------------------------
     #   API handlers — info
     # ------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------
+    def _handle_get_logs(self) -> None:
+        """Return recent log entries."""
+        from .log import get_entries
+
+        self._send_json({"entries": get_entries()})
 
     # ------------------------------------------------------------------------------------
     def _handle_get_version(self) -> None:
@@ -677,13 +676,11 @@ def run_server(host: str, port: int, data_dir: str) -> None:
     try:
         _acme_client.initialise()
     except Exception:
-        print(
-            f"  [server] Warning: ACME initialisation failed:\n{traceback.format_exc()}",
-            file=sys.stderr,
+        _log(
+            "server", f"Warning: ACME initialisation failed:\n{traceback.format_exc()}"
         )
-        print(
-            "  [server] Certificate operations will not work until config is corrected.",
-            file=sys.stderr,
+        _log(
+            "server", "Certificate operations will not work until config is corrected."
         )
 
     # Start renewal thread

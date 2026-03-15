@@ -222,6 +222,49 @@
             color: var(--text-muted);
         }
 
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+            padding: 0 24px;
+        }
+
+        .tabs button {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            padding: 10px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 0;
+        }
+
+        .tabs button:hover { color: var(--text); background: none; }
+        .tabs button.active { color: var(--text); border-bottom-color: var(--accent); background: none; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Logs */
+        .log-container {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .log-entry { color: var(--text-muted); }
+        .log-entry .log-time { color: var(--text-muted); }
+        .log-entry .log-source { color: var(--accent); }
+        .log-entry .log-msg { color: var(--text); }
+
         /* Login */
         #login-screen {
             display: flex;
@@ -295,6 +338,12 @@
 
     <!-- Admin Screen -->
     <div id="admin-screen">
+        <div class="tabs">
+            <button class="active" onclick="showTab('domains')">Domains</button>
+            <button onclick="showTab('logs')">Logs</button>
+        </div>
+
+        <div id="tab-domains" class="tab-content active">
         <div class="container">
 
             <!-- Add subdomain -->
@@ -326,6 +375,20 @@
             </div>
 
         </div>
+        </div>
+
+        <div id="tab-logs" class="tab-content">
+        <div class="container">
+            <div class="card">
+                <div class="card-header">Server Logs</div>
+                <div class="card-body">
+                    <div class="log-container" id="log-container">
+                        <div class="empty-state">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
     </div>
 
     <script>
@@ -356,6 +419,14 @@
             document.getElementById('admin-screen').style.display = 'block';
             loadBaseDomain();
             loadDomains();
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tabs button').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            event.target.classList.add('active');
+            if (name === 'logs') loadLogs();
         }
 
         // API
@@ -515,9 +586,28 @@
             URL.revokeObjectURL(a.href);
         }
 
+        // Logs
+        async function loadLogs() {
+            const data = await api('GET', '/api/logs');
+            const container = document.getElementById('log-container');
+            if (!data.entries || data.entries.length === 0) {
+                container.innerHTML = '<div class="empty-state">No log entries yet.</div>';
+                return;
+            }
+            container.innerHTML = data.entries.map(e => {
+                const time = e.timestamp ? e.timestamp.split('T')[1].split('.')[0] : '';
+                const date = e.timestamp ? e.timestamp.split('T')[0] : '';
+                return `<div class="log-entry"><span class="log-time">${date} ${time}</span> <span class="log-source">[${e.source}]</span> <span class="log-msg">${e.message}</span></div>`;
+            }).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+
         // Auto-refresh
         setInterval(() => {
-            if (document.getElementById('admin-screen').style.display !== 'none') loadDomains();
+            if (document.getElementById('admin-screen').style.display !== 'none') {
+                loadDomains();
+                if (document.getElementById('tab-logs').classList.contains('active')) loadLogs();
+            }
         }, 5000);
 
         checkAuth();

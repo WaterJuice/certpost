@@ -17,10 +17,10 @@
 # ----------------------------------------------------------------------------------------
 
 import datetime
-import sys
 import threading
 import traceback
 from .acme import AcmeClient
+from .log import log as _log
 from .storage import Storage
 
 # ----------------------------------------------------------------------------------------
@@ -82,9 +82,8 @@ class RenewalThread:
             try:
                 self._check_renewals()
             except Exception:
-                print(
-                    f"  [renewal] Error during renewal check:\n{traceback.format_exc()}",
-                    file=sys.stderr,
+                _log(
+                    "renewal", f"Error during renewal check:\n{traceback.format_exc()}"
                 )
 
             # Sleep until next check (or until stopped)
@@ -116,9 +115,9 @@ class RenewalThread:
                 time_remaining = (expires_at - now).total_seconds()
                 if time_remaining < _RENEWAL_WINDOW:
                     days_left = time_remaining / 86400
-                    print(
-                        f"  [renewal] Certificate for {subdomain} expires in {days_left:.0f} days, renewing...",
-                        file=sys.stderr,
+                    _log(
+                        "renewal",
+                        f"Certificate for {subdomain} expires in {days_left:.0f} days, renewing...",
                     )
                     self._issue_cert(subdomain)
 
@@ -130,10 +129,7 @@ class RenewalThread:
             self._acme.issue_certificate(subdomain)
         except Exception as e:
             error_msg = f"{type(e).__name__}: {e}"
-            print(
-                f"  [renewal] Failed to issue cert for {subdomain}: {error_msg}",
-                file=sys.stderr,
-            )
+            _log("renewal", f"Failed to issue cert for {subdomain}: {error_msg}")
             self._storage.update_domain(
                 subdomain,
                 {
