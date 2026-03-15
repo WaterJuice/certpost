@@ -61,6 +61,15 @@ GET /api/help
   This help text.
   No authentication required.
 
+GET /api/token-info
+  Returns the domain associated with a bearer token.
+  Requires a bearer token in the Authorization header.
+
+  Header:  Authorization: Bearer <token>
+
+  Response:
+    domain         - The domain this token is for
+
 GET /api/cert/<domain>
   Returns the certificate, chain, and private key for a domain.
   Requires a domain-specific bearer token in the Authorization header.
@@ -262,6 +271,8 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             self._handle_get_spec()
         elif path == "/api/help":
             self._handle_get_help()
+        elif path == "/api/token-info":
+            self._handle_token_info()
         elif path.startswith("/api/cert/"):
             self._handle_get_cert(path)
         # Admin routes (require session)
@@ -542,6 +553,25 @@ class _CertpostHandler(BaseHTTPRequestHandler):
     def _handle_get_help(self) -> None:
         """Return human-readable API help."""
         self._send_text(_API_HELP_TEXT)
+
+    # ------------------------------------------------------------------------------------
+    def _handle_token_info(self) -> None:
+        """Return the domain associated with a bearer token."""
+        assert _storage is not None
+
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            self._send_error(401, "Missing or invalid Authorization header")
+            return
+
+        token = auth_header[7:]
+        domains = _storage.get_domains()
+        for d in domains:
+            if d.get("api_token") == token:
+                self._send_json({"domain": d.get("subdomain", "")})
+                return
+
+        self._send_error(403, "Invalid token")
 
     # ------------------------------------------------------------------------------------
     #   API handlers — certificate retrieval (per-domain bearer auth)

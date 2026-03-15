@@ -226,6 +226,11 @@ def _run_init(args: Namespace) -> int:
     else:
         config = _build_fetch_config(server)
 
+    # Validate against server if we have one
+    if server:
+        print("\nValidating configuration against server...")
+        _validate_config(server, config, mode)
+
     tmp = output_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(config, indent=2) + "\n")
     tmp.rename(output_path)
@@ -237,6 +242,47 @@ def _run_init(args: Namespace) -> int:
         print(f"Run with: certpost fetch -c {output_path}")
     print()
     return 0
+
+
+# ----------------------------------------------------------------------------------------
+def _validate_config(server: str, config: JsonDict, mode: str) -> None:
+    """Validate config against the server, printing results."""
+    # Check server is reachable
+    try:
+        import urllib.request
+
+        url = f"{server.rstrip('/')}/api/version"
+        with urllib.request.urlopen(url, timeout=10) as response:
+            data = json.loads(response.read())
+            print(
+                f"  Server: {data.get('product', '?')} {data.get('server_version', '?')}"
+            )
+    except Exception as e:
+        print(f"  WARNING: Could not reach server: {e}")
+        return
+
+    if mode == "2":
+        # Proxy — validate each route's token
+        routes: dict[str, JsonDict] = config.get("routes", {})  # pyright: ignore[reportAssignmentType]
+        for domain, route in routes.items():
+            token = str(route.get("token", ""))
+            if _validate_token(server, token, domain):
+                print(f"  {domain}: OK")
+            else:
+                print(
+                    f"  {domain}: WARNING — token could not fetch cert (domain may not be issued yet)"
+                )
+    else:
+        # Fetch — validate single token
+        domain = str(config.get("domain", ""))
+        token = str(config.get("token", ""))
+        if domain and token:
+            if _validate_token(server, token, domain):
+                print(f"  {domain}: OK")
+            else:
+                print(
+                    f"  {domain}: WARNING — token could not fetch cert (domain may not be issued yet)"
+                )
 
 
 # ----------------------------------------------------------------------------------------
@@ -259,6 +305,39 @@ def _build_fetch_config(server: str) -> JsonDict:
 
 
 # ----------------------------------------------------------------------------------------
+def _resolve_domain_from_token(server_url: str, token: str) -> str:
+    """Ask the server which domain a token belongs to. Returns empty string on failure."""
+    if not server_url:
+        return ""
+    try:
+        import urllib.request
+
+        url = f"{server_url.rstrip('/')}/api/token-info"
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read())
+            return str(data.get("domain", ""))
+    except Exception:
+        return ""
+
+
+# ----------------------------------------------------------------------------------------
+def _validate_token(server_url: str, token: str, domain: str) -> bool:
+    """Verify a token can fetch a cert for a domain. Returns True if valid."""
+    if not server_url or not token or not domain:
+        return False
+    try:
+        fetch_cert(server_url, token, domain)
+        return True
+    except Exception:
+        return False
+
+
+# ----------------------------------------------------------------------------------------
 def _build_proxy_config(server: str) -> JsonDict:
     """Build a proxy config interactively."""
     print("\nProxy settings:")
@@ -267,12 +346,21 @@ def _build_proxy_config(server: str) -> JsonDict:
     refresh_hours = int(refresh_str) if refresh_str.isdigit() else 24
 
     routes: dict[str, JsonDict] = {}
-    print("\nAdd routes (domain -> backend). Enter empty domain when done.\n")
+    print("\nAdd routes. Enter empty token when done.\n")
     while True:
-        domain = _prompt("Domain FQDN (e.g. app.example.com)")
-        if not domain:
+        token = _prompt("API token (from certpost admin panel)")
+        if not token:
             break
-        token = _prompt(f"  API token for {domain}")
+
+        # Try to resolve domain from token
+        domain = _resolve_domain_from_token(server, token)
+        if domain:
+            print(f"  Domain: {domain}")
+        else:
+            domain = _prompt("  Could not look up domain. Enter it manually")
+            if not domain:
+                continue
+
         while True:
             backend = _prompt(f"  Backend address for {domain} (e.g. 127.0.0.1:8080)")
             if backend:
