@@ -275,7 +275,11 @@ def run_proxy(config: JsonDict, listen_addr: str) -> None:
     # Start listening
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_sock.bind((host, port))
+    try:
+        server_sock.bind((host, port))
+    except OSError as e:
+        print(f"Error: could not bind to {host}:{port} — {e}", file=sys.stderr)
+        sys.exit(1)
     server_sock.listen(128)
 
     print(f"  [proxy] Listening on {host}:{port}", file=sys.stderr)
