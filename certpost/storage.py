@@ -28,7 +28,6 @@ from typing import Any
 #   Constants
 # ----------------------------------------------------------------------------------------
 
-_DEFAULT_DATA_DIR = pathlib.Path.home() / ".certpost"
 _TOKEN_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
 _TOKEN_LENGTH = 40
 
@@ -51,9 +50,9 @@ class Storage:
     #   Construction
     # ------------------------------------------------------------------------------------
 
-    def __init__(self, data_dir: str = "") -> None:
+    def __init__(self, data_dir: str) -> None:
         """Initialise storage with the given data directory."""
-        self._data_dir = pathlib.Path(data_dir) if data_dir else _DEFAULT_DATA_DIR
+        self._data_dir = pathlib.Path(data_dir)
         self._lock = threading.Lock()
         self._initialise_data_dir()
 

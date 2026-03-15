@@ -86,9 +86,9 @@ def _create_parser() -> ArgsParser:
         "--data-dir",
         "-d",
         type=str,
-        default="",
+        required=True,
         metavar="DIR",
-        help="Data directory (default: ~/.certpost)",
+        help="Data directory containing config.json",
     )
 
     # 'setup' command
@@ -99,9 +99,9 @@ def _create_parser() -> ArgsParser:
         "--data-dir",
         "-d",
         type=str,
-        default="",
+        required=True,
         metavar="DIR",
-        help="Data directory (default: ~/.certpost)",
+        help="Data directory to create config in",
     )
 
     return parser
@@ -198,8 +198,7 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
 # ----------------------------------------------------------------------------------------
 def _resolve_data_dir(args: Namespace) -> pathlib.Path:
     """Resolve the data directory from args."""
-    data_dir = args.data_dir if args.data_dir else ""
-    return pathlib.Path(data_dir) if data_dir else pathlib.Path.home() / ".certpost"
+    return pathlib.Path(args.data_dir)
 
 
 # ----------------------------------------------------------------------------------------
@@ -242,21 +241,20 @@ def _main_inner() -> int:
         return 0
 
     if command == "run":
-        data_dir = args.data_dir if args.data_dir else ""
         data_dir_path = _resolve_data_dir(args)
         config_path = data_dir_path / "config.json"
 
         if not config_path.exists():
             print(
                 f"No config found at {config_path}\n"
-                f"Run 'certpost-server setup' to create one, or specify --data-dir.",
+                f"Run 'certpost-server setup -d {args.data_dir}' to create one.",
                 file=sys.stderr,
             )
             return 1
 
         print(f"certpost-server {VERSION_STR}", file=sys.stderr)
         print(f"Serving on http://{args.host}:{args.port}", file=sys.stderr)
-        run_server(host=args.host, port=args.port, data_dir=data_dir)
+        run_server(host=args.host, port=args.port, data_dir=args.data_dir)
         return 0
 
     # No command given — show help
