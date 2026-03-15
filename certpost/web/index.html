@@ -493,7 +493,7 @@
                             </div>
                         </div>
                         <div class="token-row">
-                            <code id="token-${enc}">${d.api_token ? (_revealedTokens.has(enc) ? d.api_token : '******') : '\u2014'}</code>
+                            <code id="token-${enc}">${d.api_token ? (_revealedTokens.has(enc) ? d.api_token : maskToken(d.api_token)) : '\u2014'}</code>
                             <div class="token-actions">
                                 <button class="btn btn-secondary btn-sm" id="reveal-${enc}" onclick="toggleToken('${enc}', '${d.api_token}')">${_revealedTokens.has(enc) ? 'Hide' : 'Show'}</button>
                                 <button class="btn btn-secondary btn-sm" onclick="copyToken('${d.api_token}')">Copy</button>
@@ -536,6 +536,11 @@
 
         const _revealedTokens = new Set();
 
+        function maskToken(token) {
+            const show = 4;
+            return token.slice(0, show) + '*'.repeat(token.length - show);
+        }
+
         function toggleToken(enc, token) {
             const el = document.getElementById('token-' + enc);
             const btn = document.getElementById('reveal-' + enc);
@@ -544,7 +549,7 @@
                 btn.textContent = 'Hide';
                 _revealedTokens.add(enc);
             } else {
-                el.textContent = token.slice(0, 6) + '\u2026';
+                el.textContent = maskToken(token);
                 btn.textContent = 'Show';
                 _revealedTokens.delete(enc);
             }
