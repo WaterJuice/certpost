@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>certpost — Certificate Manager</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --orange: #db6d28;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        header h1 span { color: var(--text-muted); font-weight: 400; }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .section-header h2 { font-size: 16px; font-weight: 600; }
+
+        .section-body { padding: 16px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-issued { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+        .status-pending { background: rgba(210, 153, 34, 0.15); color: var(--yellow); }
+        .status-issuing { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+        .status-error { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover { background: var(--accent-hover); }
+
+        button.danger {
+            background: transparent;
+            color: var(--red);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        button.danger:hover { background: rgba(248, 81, 73, 0.1); }
+
+        input, select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 100%;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: end;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .token-display {
+            background: var(--bg);
+            border: 1px solid var(--green);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 12px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .token-display .label {
+            font-size: 12px;
+            color: var(--green);
+            margin-bottom: 4px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .config-grid .full-width { grid-column: 1 / -1; }
+
+        .empty-state {
+            text-align: center;
+            padding: 32px;
+            color: var(--text-muted);
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            font-size: 14px;
+            font-weight: 500;
+            background: none;
+            border-radius: 0;
+        }
+
+        .tab:hover { color: var(--text); background: none; }
+        .tab.active { color: var(--text); border-bottom-color: var(--accent); background: none; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .error-text { color: var(--red); font-size: 12px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>certpost <span>certificate manager</span></h1>
+    </header>
+
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('domains')">Domains</button>
+        <button class="tab" onclick="showTab('tokens')">API Tokens</button>
+        <button class="tab" onclick="showTab('config')">Configuration</button>
+    </div>
+
+    <div class="container">
+        <!-- Domains Tab -->
+        <div id="tab-domains" class="tab-content active">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Add Subdomain</h2>
+                </div>
+                <div class="section-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Subdomain</label>
+                            <input type="text" id="new-subdomain" placeholder="e.g. app or api.staging">
+                        </div>
+                        <div>
+                            <button onclick="addDomain()">Add &amp; Issue</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Managed Domains</h2>
+                </div>
+                <div class="section-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Status</th>
+                                <th>Expires</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="domains-table">
+                            <tr><td colspan="4" class="empty-state">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tokens Tab -->
+        <div id="tab-tokens" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Create API Token</h2>
+                </div>
+                <div class="section-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Label</label>
+                            <input type="text" id="new-token-label" placeholder="e.g. production-server">
+                        </div>
+                        <div>
+                            <button onclick="createToken()">Create Token</button>
+                        </div>
+                    </div>
+                    <div id="new-token-display" style="display:none">
+                        <div class="token-display">
+                            <div class="label">New token (copy now — it won't be shown again):</div>
+                            <div id="new-token-value"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Active Tokens</h2>
+                </div>
+                <div class="section-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Label</th>
+                                <th>Hash Prefix</th>
+                                <th>Created</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tokens-table">
+                            <tr><td colspan="4" class="empty-state">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Config Tab -->
+        <div id="tab-config" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Configuration</h2>
+                </div>
+                <div class="section-body">
+                    <div class="config-grid">
+                        <div class="form-group">
+                            <label>Namecheap API User</label>
+                            <input type="text" id="cfg-api-user">
+                        </div>
+                        <div class="form-group">
+                            <label>Namecheap API Key</label>
+                            <input type="password" id="cfg-api-key">
+                        </div>
+                        <div class="form-group">
+                            <label>Namecheap Username</label>
+                            <input type="text" id="cfg-username">
+                        </div>
+                        <div class="form-group">
+                            <label>Client IP</label>
+                            <input type="text" id="cfg-client-ip">
+                        </div>
+                        <div class="form-group">
+                            <label>Base Domain</label>
+                            <input type="text" id="cfg-base-domain" placeholder="e.g. example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>ACME Email</label>
+                            <input type="email" id="cfg-acme-email">
+                        </div>
+                        <div class="form-group full-width">
+                            <label>ACME Directory URL</label>
+                            <input type="text" id="cfg-acme-directory">
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; text-align: right;">
+                        <button onclick="saveConfig()">Save Configuration</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            document.querySelector('[onclick="showTab(\'' + name + '\')"]').classList.add('active');
+        }
+
+        // API helpers
+        async function api(method, path, body) {
+            const opts = { method, headers: {} };
+            if (body) {
+                opts.headers['Content-Type'] = 'application/json';
+                opts.body = JSON.stringify(body);
+            }
+            const res = await fetch(path, opts);
+            return res.json();
+        }
+
+        // Format timestamp
+        function formatDate(ts) {
+            if (!ts) return '—';
+            return new Date(ts * 1000).toLocaleDateString('en-AU', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+        }
+
+        // Domains
+        async function loadDomains() {
+            const data = await api('GET', '/api/domains');
+            const tbody = document.getElementById('domains-table');
+            if (!data.domains || data.domains.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No domains configured</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.domains.map(d => `
+                <tr>
+                    <td>${d.subdomain}</td>
+                    <td><span class="status status-${d.status}">${d.status}</span>
+                        ${d.last_error ? '<br><span class="error-text">' + d.last_error + '</span>' : ''}
+                    </td>
+                    <td>${formatDate(d.cert_expires_at)}</td>
+                    <td><button class="danger" onclick="removeDomain('${d.subdomain}')">Remove</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function addDomain() {
+            const input = document.getElementById('new-subdomain');
+            const subdomain = input.value.trim();
+            if (!subdomain) return;
+            await api('POST', '/api/domains', { subdomain });
+            input.value = '';
+            loadDomains();
+        }
+
+        async function removeDomain(subdomain) {
+            if (!confirm('Remove ' + subdomain + '?')) return;
+            await api('DELETE', '/api/domains/' + subdomain);
+            loadDomains();
+        }
+
+        // Tokens
+        async function loadTokens() {
+            const data = await api('GET', '/api/tokens');
+            const tbody = document.getElementById('tokens-table');
+            if (!data.tokens || data.tokens.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No tokens created</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.tokens.map(t => `
+                <tr>
+                    <td>${t.label}</td>
+                    <td><code>${t.hash_prefix}...</code></td>
+                    <td>${formatDate(t.created_at)}</td>
+                    <td><button class="danger" onclick="revokeToken('${t.hash}')">Revoke</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function createToken() {
+            const input = document.getElementById('new-token-label');
+            const label = input.value.trim();
+            if (!label) return;
+            const data = await api('POST', '/api/tokens', { label });
+            input.value = '';
+
+            document.getElementById('new-token-value').textContent = data.token;
+            document.getElementById('new-token-display').style.display = 'block';
+            loadTokens();
+        }
+
+        async function revokeToken(hash) {
+            if (!confirm('Revoke this token?')) return;
+            await api('DELETE', '/api/tokens/' + hash);
+            loadTokens();
+        }
+
+        // Config
+        async function loadConfig() {
+            const data = await api('GET', '/api/config');
+            document.getElementById('cfg-api-user').value = data.namecheap_api_user || '';
+            document.getElementById('cfg-api-key').value = data.namecheap_api_key || '';
+            document.getElementById('cfg-username').value = data.namecheap_username || '';
+            document.getElementById('cfg-client-ip').value = data.namecheap_client_ip || '';
+            document.getElementById('cfg-base-domain').value = data.base_domain || '';
+            document.getElementById('cfg-acme-email').value = data.acme_email || '';
+            document.getElementById('cfg-acme-directory').value = data.acme_directory || '';
+        }
+
+        async function saveConfig() {
+            await api('POST', '/api/config', {
+                namecheap_api_user: document.getElementById('cfg-api-user').value,
+                namecheap_api_key: document.getElementById('cfg-api-key').value,
+                namecheap_username: document.getElementById('cfg-username').value,
+                namecheap_client_ip: document.getElementById('cfg-client-ip').value,
+                base_domain: document.getElementById('cfg-base-domain').value,
+                acme_email: document.getElementById('cfg-acme-email').value,
+                acme_directory: document.getElementById('cfg-acme-directory').value,
+            });
+            alert('Configuration saved.');
+        }
+
+        // Auto-refresh domains every 5s
+        setInterval(loadDomains, 5000);
+
+        // Initial load
+        loadDomains();
+        loadTokens();
+        loadConfig();
+    </script>
+</body>
+</html>

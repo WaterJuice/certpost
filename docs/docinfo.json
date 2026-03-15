@@ -1,0 +1,4 @@
+{
+  "title": "certpost",
+  "description": "Let's Encrypt certificate manager with DNS-01 via Namecheap and API access"
+}

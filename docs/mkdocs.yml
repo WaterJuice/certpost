@@ -1,0 +1,19 @@
+INHERIT: !ENV THEME_STD
+site_name: certpost
+
+markdown_extensions:
+  - pymdownx.snippets:
+      base_path:
+        - docs/mkdocs
+        - .
+      check_paths: false
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - Licence: licence.md
+  - Release Notes: release-notes.md
