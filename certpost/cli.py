@@ -53,7 +53,7 @@ def _create_parser() -> ArgsParser:
     """Build the argument parser with subcommands."""
     parser = ArgsParser(
         prog="certpost-server",
-        description="Let's Encrypt certificate manager with DNS-01 via Cloudflare.",
+        description="certpost server — issues and renews Let's Encrypt certificates via DNS-01 (Cloudflare), manages DNS records, and serves certificates via API.\n\nQuick start:\n  1. certpost-server setup -d <dir> — create config interactively\n  2. certpost-server run -d <dir> — start the server",
         version=f"certpost-server: {VERSION_STR}\npython: {sys.version.split()[0]}",
     )
 

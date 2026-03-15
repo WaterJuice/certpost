@@ -64,7 +64,7 @@ def _create_parser() -> ArgsParser:
     """Build the argument parser with subcommands."""
     parser = ArgsParser(
         prog="certpost",
-        description="Certificate client — fetch certs as files, run a TLS termination proxy, or generate a config. Use 'certpost <command> -h' for details on each command.",
+        description="certpost client — works with a certpost-server to manage Let's Encrypt certificates.\n\nQuick start:\n  1. certpost init — create a config interactively\n  2. certpost fetch -c config.json — download .crt and .key files\n  3. certpost proxy -c config.json — run a TLS termination proxy",
         version=f"certpost: {VERSION_STR}\npython: {sys.version.split()[0]}",
     )
 
