@@ -17,7 +17,7 @@
 #   Imports
 # ----------------------------------------------------------------------------------------
 
-import pathlib
+import os
 import socket
 import ssl
 import sys
@@ -41,6 +41,41 @@ _DEFAULT_REFRESH_HOURS = 24
 _BUFFER_SIZE = 65536
 
 # ----------------------------------------------------------------------------------------
+#   SSL helpers
+# ----------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------
+def _load_cert_into_context(ctx: ssl.SSLContext, cert_pem: str, key_pem: str) -> None:
+    """Load cert/key PEM strings into an SSL context via temp files (deleted immediately)."""
+    tmp_dir = tempfile.mkdtemp(prefix="certpost-")
+    cert_path = os.path.join(tmp_dir, "cert.pem")
+    key_path = os.path.join(tmp_dir, "key.pem")
+
+    try:
+        with open(cert_path, "w") as f:
+            f.write(cert_pem)
+        with open(key_path, "w") as f:
+            f.write(key_pem)
+        os.chmod(key_path, 0o600)
+
+        ctx.load_cert_chain(cert_path, key_path)
+    finally:
+        os.unlink(cert_path)
+        os.unlink(key_path)
+        os.rmdir(tmp_dir)
+
+
+# ----------------------------------------------------------------------------------------
+def _load_ssl_context(cert_pem: str, key_pem: str) -> ssl.SSLContext:
+    """Create an SSL context loaded with cert/key PEM strings."""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    _load_cert_into_context(ctx, cert_pem, key_pem)
+    return ctx
+
+
+# ----------------------------------------------------------------------------------------
 #   Certificate Store
 # ----------------------------------------------------------------------------------------
 
@@ -54,7 +89,7 @@ class _CertStore:
         """Initialise the certificate store."""
         self._lock = threading.Lock()
         self._contexts: dict[str, ssl.SSLContext] = {}
-        self.cert_dir = pathlib.Path(tempfile.mkdtemp(prefix="certpost-proxy-"))
+        self._pem_data: dict[str, tuple[str, str]] = {}  # domain -> (cert_pem, key_pem)
 
     # ------------------------------------------------------------------------------------
     def update_cert(self, domain: str, cert_data: JsonDict) -> None:
@@ -62,22 +97,13 @@ class _CertStore:
         cert_pem = str(cert_data.get("cert_pem", ""))
         chain_pem = str(cert_data.get("chain_pem", ""))
         key_pem = str(cert_data.get("key_pem", ""))
+        full_chain = cert_pem + chain_pem
 
-        domain_dir = self.cert_dir / domain
-        domain_dir.mkdir(parents=True, exist_ok=True)
-
-        cert_path = domain_dir / "cert.pem"
-        key_path = domain_dir / "key.pem"
-        cert_path.write_text(cert_pem + chain_pem)
-        key_path.write_text(key_pem)
-        key_path.chmod(0o600)
-
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.load_cert_chain(str(cert_path), str(key_path))
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx = _load_ssl_context(full_chain, key_pem)
 
         with self._lock:
             self._contexts[domain] = ctx
+            self._pem_data[domain] = (full_chain, key_pem)
 
         print(f"  [proxy] Certificate loaded for {domain}", file=sys.stderr)
 
@@ -92,6 +118,16 @@ class _CertStore:
         """Check if a domain has a certificate loaded."""
         with self._lock:
             return domain in self._contexts
+
+    # ------------------------------------------------------------------------------------
+    def load_into_context(self, domain: str, ctx: ssl.SSLContext) -> bool:
+        """Load a domain's cert/key into an existing SSL context."""
+        with self._lock:
+            pem = self._pem_data.get(domain)
+        if pem is None:
+            return False
+        _load_cert_into_context(ctx, pem[0], pem[1])
+        return True
 
 
 # ----------------------------------------------------------------------------------------
@@ -268,12 +304,7 @@ def run_proxy(config: JsonDict, listen_addr: str) -> None:
     base_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
 
     # Load first available cert as default
-    first_domain = loaded[0]
-    first_ctx = cert_store.get_context(first_domain)
-    if first_ctx:
-        # Copy cert from first context to base
-        cert_dir = cert_store.cert_dir / first_domain
-        base_ctx.load_cert_chain(str(cert_dir / "cert.pem"), str(cert_dir / "key.pem"))
+    cert_store.load_into_context(loaded[0], base_ctx)
 
     # Start listening
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
