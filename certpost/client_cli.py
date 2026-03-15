@@ -2,8 +2,9 @@
 #   client_cli.py
 #   -------------
 #
-#   CLI for the certpost client. Fetches certificates from a certpost server
-#   and saves them locally as PEM files.
+#   CLI for the certpost client. Subcommands:
+#     fetch  - Fetch certificates from a certpost server and save as PEM files
+#     proxy  - TLS termination proxy with SNI routing and auto-refresh
 #
 #   (c) 2026 WaterJuice — Released under the Unlicense; see LICENSE.
 #
@@ -21,11 +22,19 @@ import pathlib
 import sys
 import time
 import traceback
-import urllib.error
-import urllib.request
+from typing import Any
 from .argbuilder import ArgsParser
 from .argbuilder import Namespace
+from .client_fetch import fetch_cert
+from .client_fetch import save_cert
+from .proxy import run_proxy
 from .version import VERSION_STR
+
+# ----------------------------------------------------------------------------------------
+#   Types
+# ----------------------------------------------------------------------------------------
+
+type JsonDict = dict[str, Any]
 
 # ----------------------------------------------------------------------------------------
 #   Constants
@@ -43,6 +52,8 @@ means.
 
 For more information, please refer to <https://unlicense.org/>"""
 
+_DEFAULT_REFRESH_HOURS = 24
+
 # ----------------------------------------------------------------------------------------
 #   Functions
 # ----------------------------------------------------------------------------------------
@@ -50,7 +61,7 @@ For more information, please refer to <https://unlicense.org/>"""
 
 # ----------------------------------------------------------------------------------------
 def _create_parser() -> ArgsParser:
-    """Build the argument parser."""
+    """Build the argument parser with subcommands."""
     parser = ArgsParser(
         prog="certpost",
         description="Fetch certificates from a certpost server.",
@@ -63,31 +74,33 @@ def _create_parser() -> ArgsParser:
         dest="license",
         help="Show licence information and exit",
     )
-    parser.add_argument(
+
+    # 'fetch' command — one-shot or recurring cert fetch
+    fetch_cmd = parser.add_command(
+        "fetch", help="Fetch certificates and save as PEM files"
+    )
+    fetch_cmd.add_argument(
         "--server",
         "-s",
         type=str,
-        required=True,
         metavar="URL",
         help="certpost server URL (e.g. http://certpost.example.com:8443)",
     )
-    parser.add_argument(
+    fetch_cmd.add_argument(
         "--token",
         "-t",
         type=str,
-        required=True,
         metavar="TOKEN",
         help="Bearer token for authentication",
     )
-    parser.add_argument(
+    fetch_cmd.add_argument(
         "--domain",
         "-d",
         type=str,
-        required=True,
         metavar="FQDN",
-        help="Fully qualified domain name to fetch certificate for",
+        help="Domain to fetch certificate for",
     )
-    parser.add_argument(
+    fetch_cmd.add_argument(
         "--output-dir",
         "-o",
         type=str,
@@ -95,12 +108,40 @@ def _create_parser() -> ArgsParser:
         metavar="DIR",
         help="Directory to save certificate files (default: current directory)",
     )
-    parser.add_argument(
-        "--poll",
+    fetch_cmd.add_argument(
+        "--refresh",
         type=int,
         default=0,
-        metavar="SECONDS",
-        help="Poll interval in seconds (0 = fetch once and exit)",
+        metavar="HOURS",
+        help="Refresh interval in hours (0 = fetch once, default: 0)",
+    )
+    fetch_cmd.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default="",
+        metavar="FILE",
+        help="Config file (JSON) instead of CLI args",
+    )
+
+    # 'proxy' command — TLS termination proxy
+    proxy_cmd = parser.add_command(
+        "proxy", help="TLS termination proxy with SNI routing"
+    )
+    proxy_cmd.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default="",
+        metavar="FILE",
+        help="Config file (JSON) — required for proxy mode",
+    )
+    proxy_cmd.add_argument(
+        "--listen",
+        type=str,
+        default="0.0.0.0:443",
+        metavar="ADDR",
+        help="Listen address (default: 0.0.0.0:443)",
     )
 
     return parser
@@ -116,45 +157,100 @@ def _show_licence() -> None:
 
 
 # ----------------------------------------------------------------------------------------
-def _fetch_cert(server_url: str, token: str, domain: str) -> dict[str, str]:
-    """Fetch certificate data from the server."""
-    url = f"{server_url.rstrip('/')}/api/cert/{domain}"
-    req = urllib.request.Request(
-        url,
-        headers={"Authorization": f"Bearer {token}"},
-        method="GET",
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return json.loads(response.read())  # pyright: ignore[reportReturnType]
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        raise RuntimeError(f"Server returned {e.code}: {error_body}") from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Could not connect to server: {e.reason}") from e
+def _load_config(config_path: str) -> JsonDict:
+    """Load a JSON config file."""
+    path = pathlib.Path(config_path)
+    if not path.exists():
+        raise RuntimeError(f"Config file not found: {config_path}")
+    return json.loads(path.read_text())  # pyright: ignore[reportReturnType]
 
 
 # ----------------------------------------------------------------------------------------
-def _save_cert(
-    output_dir: pathlib.Path, domain: str, cert_data: dict[str, str]
-) -> None:
-    """Save certificate files to disk."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+def _run_fetch(args: Namespace) -> int:
+    """Run the fetch command."""
+    # Load from config file or CLI args
+    if args.config:
+        config = _load_config(args.config)
+        server = str(config.get("server", ""))
+        token = str(config.get("token", ""))
+        domain = str(config.get("domain", ""))
+        output_dir = pathlib.Path(str(config.get("output_dir", ".")))
+        refresh_hours = int(config.get("refresh_hours", 0))
+    else:
+        server = args.server or ""
+        token = args.token or ""
+        domain = args.domain or ""
+        output_dir = pathlib.Path(args.output_dir)
+        refresh_hours = args.refresh
 
-    cert_path = output_dir / f"{domain}.crt"
-    key_path = output_dir / f"{domain}.key"
+    if not server or not token or not domain:
+        print(
+            "Error: --server, --token, and --domain are required (or use --config)",
+            file=sys.stderr,
+        )
+        return 1
 
-    cert_pem = cert_data.get("cert_pem", "")
-    chain_pem = cert_data.get("chain_pem", "")
-    key_pem = cert_data.get("key_pem", "")
+    refresh_seconds = refresh_hours * 3600
 
-    cert_path.write_text(cert_pem + chain_pem)
-    key_path.write_text(key_pem)
-    key_path.chmod(0o600)
+    while True:
+        print(f"Fetching certificate for {domain}...", file=sys.stderr)
+        try:
+            cert_data = fetch_cert(server, token, domain)
+            save_cert(output_dir, domain, cert_data)
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            if refresh_seconds <= 0:
+                return 1
 
-    print(f"Wrote public cert to {cert_path}")
-    print(f"Wrote private key to {key_path}")
+        if refresh_seconds <= 0:
+            break
+
+        print(f"Next refresh in {refresh_hours}h", file=sys.stderr)
+        time.sleep(refresh_seconds)
+
+    return 0
+
+
+# ----------------------------------------------------------------------------------------
+def _run_proxy(args: Namespace) -> int:
+    """Run the proxy command."""
+    config_path = args.config
+    if not config_path:
+        print("Error: --config is required for proxy mode", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Example config file:", file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "server": "http://certpost.example.com:8443",
+                    "listen": "0.0.0.0:443",
+                    "refresh_hours": 24,
+                    "routes": {
+                        "app.example.com": {
+                            "token": "your-api-token",
+                            "backend": "127.0.0.1:8080",
+                        },
+                        "api.example.com": {
+                            "token": "another-api-token",
+                            "backend": "127.0.0.1:9090",
+                        },
+                    },
+                },
+                indent=2,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+    config = _load_config(config_path)
+    listen = (
+        args.listen
+        if args.listen != "0.0.0.0:443"
+        else str(config.get("listen", "0.0.0.0:443"))
+    )
+
+    run_proxy(config, listen)
+    return 0
 
 
 # ----------------------------------------------------------------------------------------
@@ -182,7 +278,6 @@ def main() -> int:
 # ----------------------------------------------------------------------------------------
 def _main_inner() -> int:
     """Inner main function that does the actual work."""
-    # Handle --license before parsing.
     if "--license" in sys.argv or "--licence" in sys.argv:
         _show_licence()
         return 0
@@ -190,29 +285,14 @@ def _main_inner() -> int:
     parser = _create_parser()
     args: Namespace = parser.parse()
 
-    print(f"certpost {VERSION_STR}", file=sys.stderr)
+    command = args.command if hasattr(args, "command") else None
 
-    output_dir = pathlib.Path(args.output_dir)
-    poll_interval: int = args.poll
+    if command == "fetch":
+        return _run_fetch(args)
 
-    while True:
-        print(
-            f"Fetching certificate for {args.domain} from {args.server}...",
-            file=sys.stderr,
-        )
-        try:
-            cert_data = _fetch_cert(args.server, args.token, args.domain)
-            _save_cert(output_dir, args.domain, cert_data)
-            print("Done.", file=sys.stderr)
-        except RuntimeError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            if poll_interval <= 0:
-                return 1
+    if command == "proxy":
+        return _run_proxy(args)
 
-        if poll_interval <= 0:
-            break
-
-        print(f"Sleeping {poll_interval}s until next check...", file=sys.stderr)
-        time.sleep(poll_interval)
-
+    # No command — show help
+    parser.parse(["--help"])
     return 0
