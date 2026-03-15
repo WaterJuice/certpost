@@ -15,7 +15,9 @@
 #   Imports
 # ----------------------------------------------------------------------------------------
 
+import json
 import pathlib
+import secrets
 import sys
 import traceback
 from .argbuilder import ArgsParser
@@ -49,7 +51,7 @@ def _create_parser() -> ArgsParser:
     """Build the argument parser."""
     parser = ArgsParser(
         prog="certpost-server",
-        description="Let's Encrypt certificate manager with DNS-01 via Namecheap.",
+        description="Let's Encrypt certificate manager with DNS-01 via Cloudflare.",
         version=f"certpost-server: {VERSION_STR}\npython: {sys.version.split()[0]}",
     )
 
@@ -58,6 +60,12 @@ def _create_parser() -> ArgsParser:
         action="store_true",
         dest="license",
         help="Show licence information and exit",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        dest="setup",
+        help="Run interactive setup wizard for config.json",
     )
     parser.add_argument(
         "--port",
@@ -97,6 +105,85 @@ def _show_licence() -> None:
 
 
 # ----------------------------------------------------------------------------------------
+def _prompt(label: str, default: str = "") -> str:
+    """Prompt for input with an optional default."""
+    if default:
+        result = input(f"  {label} [{default}]: ").strip()
+        return result if result else default
+    result = input(f"  {label}: ").strip()
+    return result
+
+
+# ----------------------------------------------------------------------------------------
+def _run_setup(data_dir_path: pathlib.Path) -> None:
+    """Run interactive setup wizard to create or update config.json."""
+    data_dir_path.mkdir(parents=True, exist_ok=True)
+    (data_dir_path / "certs").mkdir(exist_ok=True)
+
+    config_path = data_dir_path / "config.json"
+
+    # Load existing config if present
+    existing: dict[str, str | int] = {}
+    if config_path.exists():
+        existing = json.loads(config_path.read_text())
+        print(f"\nUpdating existing config at {config_path}\n")
+    else:
+        print(f"\nCreating new config at {config_path}\n")
+
+    print("Cloudflare DNS settings:")
+    cf_token = _prompt(
+        "Cloudflare API token",
+        str(existing.get("cloudflare_api_token", "")),
+    )
+    cf_zone = _prompt(
+        "Cloudflare Zone ID",
+        str(existing.get("cloudflare_zone_id", "")),
+    )
+
+    print("\nDomain settings:")
+    base_domain = _prompt(
+        "Base domain (e.g. example.com)",
+        str(existing.get("base_domain", "")),
+    )
+
+    print("\nServer settings:")
+    port_str = _prompt("Port", str(existing.get("port", 8443)))
+    port = int(port_str) if port_str.isdigit() else 8443
+
+    # Generate admin key if not present
+    admin_key = str(existing.get("admin_key", ""))
+    if not admin_key:
+        admin_key = secrets.token_urlsafe(32)
+
+    config: dict[str, object] = {
+        "cloudflare_api_token": cf_token,
+        "cloudflare_zone_id": cf_zone,
+        "base_domain": base_domain,
+        "admin_key": admin_key,
+        "port": port,
+    }
+
+    # Preserve sessions if they exist
+    if "sessions" in existing:
+        config["sessions"] = existing["sessions"]
+
+    tmp = config_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(config, indent=2) + "\n")
+    tmp.rename(config_path)
+
+    # Also create domains.json if missing
+    domains_path = data_dir_path / "domains.json"
+    if not domains_path.exists():
+        tmp = domains_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"domains": []}, indent=2) + "\n")
+        tmp.rename(domains_path)
+
+    print(f"\nConfig saved to {config_path}")
+    print(f"Admin key: {admin_key}")
+    print()
+
+
+# ----------------------------------------------------------------------------------------
 def main() -> int:
     """Entry point for the CLI."""
     try:
@@ -130,6 +217,14 @@ def _main_inner() -> int:
     args: Namespace = parser.parse()
 
     data_dir = args.data_dir if args.data_dir else ""
+    data_dir_path = (
+        pathlib.Path(data_dir) if data_dir else pathlib.Path.home() / ".certpost"
+    )
+
+    # Run setup wizard if requested
+    if args.setup:
+        _run_setup(data_dir_path)
+        return 0
 
     print(
         f"certpost-server {VERSION_STR}",

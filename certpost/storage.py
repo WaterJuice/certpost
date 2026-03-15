@@ -2,8 +2,9 @@
 #   storage.py
 #   ----------
 #
-#   JSON file storage for certpost. Manages configuration, certificates, and API
-#   tokens in ~/.certpost/. All file writes are protected by a threading lock.
+#   JSON file storage for certpost. Manages configuration, certificates, and
+#   per-domain API tokens in ~/.certpost/. All file writes are protected by a
+#   threading lock.
 #
 #   (c) 2026 WaterJuice — Released under the Unlicense; see LICENSE.
 #
@@ -16,12 +17,11 @@
 #   Imports
 # ----------------------------------------------------------------------------------------
 
-import hashlib
+import datetime
 import json
 import pathlib
 import secrets
 import threading
-import time
 from typing import Any
 
 # ----------------------------------------------------------------------------------------
@@ -80,15 +80,10 @@ class Storage:
                 "cloudflare_api_token": "",
                 "cloudflare_zone_id": "",
                 "base_domain": "",
-                "acme_email": "",
-                "acme_directory": "https://acme-v02.api.letsencrypt.org/directory",
+                "admin_key": secrets.token_urlsafe(32),
                 "port": 8443,
             }
             self._write_json(config_path, default_config)
-
-        tokens_path = self._data_dir / "tokens.json"
-        if not tokens_path.exists():
-            self._write_json(tokens_path, {"tokens": []})
 
         domains_path = self._data_dir / "domains.json"
         if not domains_path.exists():
@@ -123,6 +118,34 @@ class Storage:
         self._write_json(self._data_dir / "config.json", config)
 
     # ------------------------------------------------------------------------------------
+    #   Admin auth
+    # ------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------
+    def verify_admin_key(self, key: str) -> bool:
+        """Verify the admin login key."""
+        config = self.get_config()
+        return key == config.get("admin_key", "")
+
+    # ------------------------------------------------------------------------------------
+    def create_session(self) -> str:
+        """Create a new admin session token."""
+        token = secrets.token_urlsafe(32)
+        config = self.get_config()
+        sessions: list[str] = config.get("sessions", [])  # pyright: ignore[reportAssignmentType]
+        sessions.append(token)
+        config["sessions"] = sessions
+        self.save_config(config)
+        return token
+
+    # ------------------------------------------------------------------------------------
+    def verify_session(self, token: str) -> bool:
+        """Verify an admin session token."""
+        config = self.get_config()
+        sessions: list[str] = config.get("sessions", [])  # pyright: ignore[reportAssignmentType]
+        return token in sessions
+
+    # ------------------------------------------------------------------------------------
     #   Domains
     # ------------------------------------------------------------------------------------
 
@@ -133,8 +156,8 @@ class Storage:
         return data.get("domains", [])  # pyright: ignore[reportReturnType]
 
     # ------------------------------------------------------------------------------------
-    def add_domain(self, subdomain: str) -> JsonDict:
-        """Add a new subdomain to manage. Returns the domain entry."""
+    def add_domain(self, subdomain: str, ip_address: str) -> JsonDict:
+        """Add a new subdomain with a generated API token. Returns the domain entry."""
         data = self._read_json(self._data_dir / "domains.json")
         domains: list[JsonDict] = data.get("domains", [])  # pyright: ignore[reportAssignmentType]
 
@@ -145,8 +168,10 @@ class Storage:
 
         entry: JsonDict = {
             "subdomain": subdomain,
+            "ip_address": ip_address,
             "status": "pending",
-            "added_at": time.time(),
+            "api_token": secrets.token_urlsafe(32),
+            "added_at": datetime.datetime.now(datetime.UTC).isoformat(),
             "cert_expires_at": None,
             "last_error": None,
         }
@@ -176,47 +201,20 @@ class Storage:
         self._write_json(self._data_dir / "domains.json", {"domains": domains})
 
     # ------------------------------------------------------------------------------------
-    #   Tokens
-    # ------------------------------------------------------------------------------------
+    def rotate_domain_token(self, subdomain: str) -> str:
+        """Generate a new API token for a domain. Returns the new token."""
+        new_token = secrets.token_urlsafe(32)
+        self.update_domain(subdomain, {"api_token": new_token})
+        return new_token
 
     # ------------------------------------------------------------------------------------
-    def get_tokens(self) -> list[JsonDict]:
-        """Return the list of API tokens (hashed)."""
-        data = self._read_json(self._data_dir / "tokens.json")
-        return data.get("tokens", [])  # pyright: ignore[reportReturnType]
-
-    # ------------------------------------------------------------------------------------
-    def create_token(self, label: str) -> str:
-        """Create a new API token. Returns the plaintext token (only shown once)."""
-        token = secrets.token_urlsafe(32)
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-
-        data = self._read_json(self._data_dir / "tokens.json")
-        tokens: list[JsonDict] = data.get("tokens", [])  # pyright: ignore[reportAssignmentType]
-        tokens.append(
-            {
-                "label": label,
-                "hash": token_hash,
-                "created_at": time.time(),
-            }
-        )
-        self._write_json(self._data_dir / "tokens.json", {"tokens": tokens})
-        return token
-
-    # ------------------------------------------------------------------------------------
-    def verify_token(self, token: str) -> bool:
-        """Verify a bearer token against stored hashes."""
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        tokens = self.get_tokens()
-        return any(t.get("hash") == token_hash for t in tokens)
-
-    # ------------------------------------------------------------------------------------
-    def revoke_token(self, token_hash: str) -> None:
-        """Revoke a token by its hash."""
-        data = self._read_json(self._data_dir / "tokens.json")
-        tokens: list[JsonDict] = data.get("tokens", [])  # pyright: ignore[reportAssignmentType]
-        tokens = [t for t in tokens if t.get("hash") != token_hash]
-        self._write_json(self._data_dir / "tokens.json", {"tokens": tokens})
+    def verify_domain_token(self, subdomain: str, token: str) -> bool:
+        """Verify an API token against a specific domain."""
+        domains = self.get_domains()
+        for d in domains:
+            if d.get("subdomain") == subdomain and d.get("api_token") == token:
+                return True
+        return False
 
     # ------------------------------------------------------------------------------------
     #   Certificates
@@ -229,7 +227,7 @@ class Storage:
         cert_pem: str,
         chain_pem: str,
         key_pem: str,
-        expires_at: float,
+        expires_at: str,
     ) -> None:
         """Save certificate files for a subdomain."""
         cert_dir = self._data_dir / "certs" / subdomain
@@ -240,7 +238,7 @@ class Storage:
             "chain_pem": chain_pem,
             "key_pem": key_pem,
             "expires_at": expires_at,
-            "issued_at": time.time(),
+            "issued_at": datetime.datetime.now(datetime.UTC).isoformat(),
         }
         self._write_json(cert_dir / "cert.json", cert_data)
 

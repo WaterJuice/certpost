@@ -16,9 +16,9 @@
 #   Imports
 # ----------------------------------------------------------------------------------------
 
+import datetime
 import sys
 import threading
-import time
 import traceback
 from .acme import AcmeClient
 from .storage import Storage
@@ -95,12 +95,12 @@ class RenewalThread:
     def _check_renewals(self) -> None:
         """Check all domains and renew certificates that are near expiry."""
         domains = self._storage.get_domains()
-        now = time.time()
+        now = datetime.datetime.now(datetime.UTC)
 
         for domain in domains:
             subdomain = domain.get("subdomain", "")
             status = domain.get("status", "")
-            expires_at = domain.get("cert_expires_at")
+            expires_at_str = domain.get("cert_expires_at")
 
             if not subdomain:
                 continue
@@ -111,11 +111,13 @@ class RenewalThread:
                 continue
 
             # Renew certs within the renewal window
-            if status == "issued" and expires_at is not None:
-                time_remaining = float(str(expires_at)) - now
+            if status == "issued" and expires_at_str is not None:
+                expires_at = datetime.datetime.fromisoformat(str(expires_at_str))
+                time_remaining = (expires_at - now).total_seconds()
                 if time_remaining < _RENEWAL_WINDOW:
+                    days_left = time_remaining / 86400
                     print(
-                        f"  [renewal] Certificate for {subdomain} expires in {time_remaining / 86400:.0f} days, renewing...",
+                        f"  [renewal] Certificate for {subdomain} expires in {days_left:.0f} days, renewing...",
                         file=sys.stderr,
                     )
                     self._issue_cert(subdomain)

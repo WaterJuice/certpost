@@ -127,16 +127,17 @@ def get_rsa_public_numbers(key_pem: str) -> tuple[str, str]:
         in_modulus = False
 
         for line in lines:
-            if "modulus:" in line.lower():
+            if "modulus:" in line.lower() and "publicexponent" not in line.lower():
                 in_modulus = True
                 continue
-            if "exponent:" in line.lower():
+            if "publicexponent:" in line.lower():
                 in_modulus = False
-                # Extract exponent value
-                parts = line.split("(")
-                if len(parts) >= 1:
-                    exp_str = parts[0].split(":")[1].strip()
-                    exponent = int(exp_str)
+                # Format: "publicExponent: 65537 (0x10001)"
+                exp_str = line.split(":")[1].strip().split(" ")[0]
+                exponent = int(exp_str)
+                continue
+            if in_modulus and "exponent" in line.lower():
+                in_modulus = False
                 continue
             if in_modulus:
                 stripped = line.strip().replace(":", "")
@@ -243,8 +244,8 @@ def dns_challenge_value(token: str, account_key_pem: str) -> str:
 
 
 # ----------------------------------------------------------------------------------------
-def parse_cert_expiry(cert_pem: str) -> float:
-    """Parse the expiry date from a PEM certificate. Returns Unix timestamp."""
+def parse_cert_expiry(cert_pem: str) -> str:
+    """Parse the expiry date from a PEM certificate. Returns ISO 8601 timestamp."""
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".pem", delete=False
     ) as cert_file:
@@ -268,8 +269,10 @@ def parse_cert_expiry(cert_pem: str) -> float:
             raise ValueError(f"Could not parse certificate expiry date: {date_str}")
 
         import calendar
+        import datetime
 
-        return float(calendar.timegm(parsed))
+        ts = calendar.timegm(parsed)
+        return datetime.datetime.fromtimestamp(ts, tz=datetime.UTC).isoformat()
     finally:
         import os
 

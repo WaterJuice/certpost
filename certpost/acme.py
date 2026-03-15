@@ -22,12 +22,12 @@ import time
 import urllib.error
 import urllib.request
 from typing import Any
-from .cloudflare import CloudflareClient
 from .crypto import build_jws
 from .crypto import create_csr
 from .crypto import dns_challenge_value
 from .crypto import generate_rsa_key
 from .crypto import parse_cert_expiry
+from .dns import DnsProvider
 from .storage import Storage
 
 # ----------------------------------------------------------------------------------------
@@ -45,6 +45,7 @@ _CHALLENGE_POLL_INTERVAL = 2
 _CHALLENGE_POLL_TIMEOUT = 120
 _ORDER_POLL_INTERVAL = 2
 _ORDER_POLL_TIMEOUT = 120
+_ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory"
 
 # ----------------------------------------------------------------------------------------
 #   ACME Client
@@ -59,10 +60,10 @@ class AcmeClient:
     #   Construction
     # ------------------------------------------------------------------------------------
 
-    def __init__(self, storage: Storage, cloudflare: CloudflareClient) -> None:
+    def __init__(self, storage: Storage, dns: DnsProvider) -> None:
         """Initialise the ACME client."""
         self._storage = storage
-        self._cloudflare = cloudflare
+        self._dns = dns
         self._directory: JsonDict = {}
         self._account_key_pem: str = ""
         self._account_kid: str = ""
@@ -79,11 +80,7 @@ class AcmeClient:
     # ------------------------------------------------------------------------------------
     def _fetch_directory(self) -> None:
         """Fetch the ACME directory endpoints."""
-        config = self._storage.get_config()
-        directory_url = config.get(
-            "acme_directory", "https://acme-v02.api.letsencrypt.org/directory"
-        )
-        with urllib.request.urlopen(str(directory_url), timeout=30) as response:
+        with urllib.request.urlopen(_ACME_DIRECTORY, timeout=30) as response:
             self._directory = json.loads(response.read())
 
     # ------------------------------------------------------------------------------------
@@ -141,15 +138,10 @@ class AcmeClient:
             self._account_key_pem = generate_rsa_key(4096)
 
         # Register account
-        config = self._storage.get_config()
-        email = config.get("acme_email", "")
-
         self._log("Registering ACME account...")
         payload: JsonDict = {
             "termsOfServiceAgreed": True,
         }
-        if email:
-            payload["contact"] = [f"mailto:{email}"]
 
         new_account_url = self._directory["newAccount"]
         _, headers = self._acme_request(str(new_account_url), payload)
@@ -212,7 +204,7 @@ class AcmeClient:
             # Set DNS TXT record
             acme_record_name = f"_acme-challenge.{fqdn}"
             self._log(f"Setting TXT record: {acme_record_name} = {challenge_value}")
-            self._cloudflare.set_txt_record(acme_record_name, challenge_value)
+            self._dns.set_txt_record(acme_record_name, challenge_value)
 
             # Wait for DNS propagation
             self._log(f"Waiting {_DNS_PROPAGATION_WAIT}s for DNS propagation...")
@@ -238,7 +230,7 @@ class AcmeClient:
 
             # Clean up DNS record
             self._log("Cleaning up TXT record...")
-            self._cloudflare.remove_txt_record(acme_record_name)
+            self._dns.remove_txt_record(acme_record_name)
 
         # Generate cert key and CSR
         self._log("Generating certificate key and CSR...")

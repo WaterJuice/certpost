@@ -142,39 +142,19 @@ def _save_cert(
     """Save certificate files to disk."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use domain name as prefix, replacing dots with underscores for filenames
-    prefix = domain.replace(".", "_")
-
-    cert_path = output_dir / f"{prefix}.crt"
-    chain_path = output_dir / f"{prefix}.chain.crt"
-    key_path = output_dir / f"{prefix}.key"
-    fullchain_path = output_dir / f"{prefix}.fullchain.crt"
+    cert_path = output_dir / f"{domain}.crt"
+    key_path = output_dir / f"{domain}.key"
 
     cert_pem = cert_data.get("cert_pem", "")
     chain_pem = cert_data.get("chain_pem", "")
     key_pem = cert_data.get("key_pem", "")
 
-    cert_path.write_text(cert_pem)
-    chain_path.write_text(chain_pem)
+    cert_path.write_text(cert_pem + chain_pem)
     key_path.write_text(key_pem)
-    fullchain_path.write_text(cert_pem + chain_pem)
-
-    # Set restrictive permissions on the key file
     key_path.chmod(0o600)
 
-    print(f"  Certificate: {cert_path}")
-    print(f"  Chain:       {chain_path}")
-    print(f"  Full chain:  {fullchain_path}")
-    print(f"  Private key: {key_path}")
-
-    expires_at = cert_data.get("expires_at")
-    if expires_at:
-        import datetime
-
-        expiry = datetime.datetime.fromtimestamp(
-            float(str(expires_at)), tz=datetime.UTC
-        )
-        print(f"  Expires:     {expiry.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Wrote public cert to {cert_path}")
+    print(f"Wrote private key to {key_path}")
 
 
 # ----------------------------------------------------------------------------------------

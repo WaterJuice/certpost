@@ -2,8 +2,8 @@
 #   cloudflare.py
 #   -------------
 #
-#   Cloudflare DNS API client for managing TXT records. Used for DNS-01 ACME challenges.
-#   Uses a scoped API token (no IP whitelisting required).
+#   Cloudflare DNS API client for managing DNS records. Handles TXT records for
+#   DNS-01 ACME challenges and A records for subdomain pointing.
 #
 #   (c) 2026 WaterJuice — Released under the Unlicense; see LICENSE.
 #
@@ -140,6 +140,55 @@ class CloudflareClient:
         result = self._api_call(
             "GET",
             f"/zones/{self._zone_id}/dns_records?type=TXT&name={name}",
+        )
+        records: list[JsonDict] = result.get("result", [])  # pyright: ignore[reportAssignmentType]
+        return records
+
+    # ------------------------------------------------------------------------------------
+    def set_a_record(self, name: str, ip_address: str) -> str:
+        """Create or update an A record. Returns the record ID."""
+        existing = self._find_a_records(name)
+        for record in existing:
+            record_id = str(record.get("id", ""))
+            if record_id:
+                self._api_call(
+                    "DELETE",
+                    f"/zones/{self._zone_id}/dns_records/{record_id}",
+                )
+
+        result = self._api_call(
+            "POST",
+            f"/zones/{self._zone_id}/dns_records",
+            {
+                "type": "A",
+                "name": name,
+                "content": ip_address,
+                "ttl": 1,
+                "proxied": False,
+            },
+        )
+
+        record_result: JsonDict = result.get("result", {})  # pyright: ignore[reportAssignmentType]
+        return str(record_result.get("id", ""))
+
+    # ------------------------------------------------------------------------------------
+    def remove_a_record(self, name: str) -> None:
+        """Remove all A records matching the given name."""
+        records = self._find_a_records(name)
+        for record in records:
+            record_id = str(record.get("id", ""))
+            if record_id:
+                self._api_call(
+                    "DELETE",
+                    f"/zones/{self._zone_id}/dns_records/{record_id}",
+                )
+
+    # ------------------------------------------------------------------------------------
+    def _find_a_records(self, name: str) -> list[JsonDict]:
+        """Find A records matching the given name."""
+        result = self._api_call(
+            "GET",
+            f"/zones/{self._zone_id}/dns_records?type=A&name={name}",
         )
         records: list[JsonDict] = result.get("result", [])  # pyright: ignore[reportAssignmentType]
         return records
