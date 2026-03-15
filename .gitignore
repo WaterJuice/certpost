@@ -45,5 +45,8 @@ certpost/_version.py
 # Local data
 /local
 
+# Claude
+.claude/
+
 # macOS
 .DS_Store
