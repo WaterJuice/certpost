@@ -45,6 +45,155 @@ type JsonDict = dict[str, Any]
 
 _WEB_DIR = pathlib.Path(__file__).parent / "web"
 
+_API_HELP_TEXT = """\
+certpost API
+============
+
+GET /api/version
+  Returns product name, API version, and server version.
+  No authentication required.
+
+GET /api/spec
+  Returns the OpenAPI 3.0 specification as JSON.
+  No authentication required.
+
+GET /api/help
+  This help text.
+  No authentication required.
+
+GET /api/cert/<domain>
+  Returns the certificate, chain, and private key for a domain.
+  Requires a domain-specific bearer token in the Authorization header.
+
+  Header:  Authorization: Bearer <token>
+
+  Response:
+    cert_pem       - Server certificate (PEM)
+    chain_pem      - Intermediate certificate chain (PEM)
+    key_pem        - Private key (PEM)
+    expires_at     - Certificate expiry (ISO 8601)
+    issued_at      - Certificate issue date (ISO 8601)
+
+  Example:
+    curl -H "Authorization: Bearer <token>" http://localhost:8443/api/cert/app.example.com
+"""
+
+_OPENAPI_SPEC: dict[str, object] = {
+    "openapi": "3.0.3",
+    "info": {
+        "title": "certpost",
+        "description": "Let's Encrypt certificate manager API",
+        "version": "1.0",
+    },
+    "paths": {
+        "/api/version": {
+            "get": {
+                "summary": "Server version information",
+                "responses": {
+                    "200": {
+                        "description": "Version info",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "product": {
+                                            "type": "string",
+                                            "example": "certpost",
+                                        },
+                                        "api_version": {
+                                            "type": "string",
+                                            "example": "1.0",
+                                        },
+                                        "server_version": {
+                                            "type": "string",
+                                            "example": "1.0.0",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "/api/help": {
+            "get": {
+                "summary": "Human-readable API help",
+                "responses": {
+                    "200": {
+                        "description": "Plain text help",
+                        "content": {"text/plain": {"schema": {"type": "string"}}},
+                    },
+                },
+            },
+        },
+        "/api/cert/{domain}": {
+            "get": {
+                "summary": "Retrieve certificate for a domain",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string"},
+                        "description": "Fully qualified domain name",
+                    },
+                ],
+                "security": [{"bearerAuth": []}],
+                "responses": {
+                    "200": {
+                        "description": "Certificate data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cert_pem": {
+                                            "type": "string",
+                                            "description": "Server certificate (PEM)",
+                                        },
+                                        "chain_pem": {
+                                            "type": "string",
+                                            "description": "Intermediate chain (PEM)",
+                                        },
+                                        "key_pem": {
+                                            "type": "string",
+                                            "description": "Private key (PEM)",
+                                        },
+                                        "expires_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "description": "Certificate expiry",
+                                        },
+                                        "issued_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "description": "Certificate issue date",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    "401": {"description": "Missing or invalid Authorization header"},
+                    "403": {"description": "Invalid token for this domain"},
+                    "404": {"description": "No certificate found for domain"},
+                },
+            },
+        },
+    },
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Domain-specific API token from the certpost admin panel",
+            },
+        },
+    },
+}
+
 # ----------------------------------------------------------------------------------------
 #   Module State
 # ----------------------------------------------------------------------------------------
@@ -107,6 +256,12 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         # Public routes
         if path == "/" or path == "/index.html":
             self._serve_admin_panel()
+        elif path == "/api/version":
+            self._handle_get_version()
+        elif path == "/api/spec":
+            self._handle_get_spec()
+        elif path == "/api/help":
+            self._handle_get_help()
         elif path.startswith("/api/cert/"):
             self._handle_get_cert(path)
         # Admin routes (require session)
@@ -362,6 +517,33 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         self._send_json({"subdomain": subdomain, "api_token": new_token})
 
     # ------------------------------------------------------------------------------------
+    #   API handlers — info
+    # ------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------
+    def _handle_get_version(self) -> None:
+        """Return product name, API version, and server version."""
+        from .version import VERSION_STR
+
+        self._send_json(
+            {
+                "product": "certpost",
+                "api_version": "1.0",
+                "server_version": VERSION_STR,
+            }
+        )
+
+    # ------------------------------------------------------------------------------------
+    def _handle_get_spec(self) -> None:
+        """Return OpenAPI spec."""
+        self._send_json(_OPENAPI_SPEC)
+
+    # ------------------------------------------------------------------------------------
+    def _handle_get_help(self) -> None:
+        """Return human-readable API help."""
+        self._send_text(_API_HELP_TEXT)
+
+    # ------------------------------------------------------------------------------------
     #   API handlers — certificate retrieval (per-domain bearer auth)
     # ------------------------------------------------------------------------------------
 
@@ -411,11 +593,21 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             return None
 
     # ------------------------------------------------------------------------------------
-    def _send_json(self, data: Any) -> None:
-        """Send a JSON response."""
-        body = json.dumps(data, indent=2).encode()
-        self.send_response(200)
+    def _send_json(self, data: Any, code: int = 200) -> None:
+        """Send a JSON response with indent=2 and trailing newline."""
+        body = (json.dumps(data, indent=2) + "\n").encode()
+        self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ------------------------------------------------------------------------------------
+    def _send_text(self, text: str, code: int = 200) -> None:
+        """Send a plain text response."""
+        body = text.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -423,12 +615,7 @@ class _CertpostHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------------------------
     def _send_error(self, code: int, message: str) -> None:
         """Send a JSON error response."""
-        body = json.dumps({"error": message}).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        self._send_json({"error": message}, code=code)
 
 
 # ----------------------------------------------------------------------------------------
