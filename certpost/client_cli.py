@@ -83,16 +83,8 @@ def _create_parser() -> ArgsParser:
             "Download certificates from a certpost server and save them as\n"
             "<domain>.crt and <domain>.key files. Use --refresh to keep fetching\n"
             "on a schedule (e.g. every 24 hours) so renewed certs are picked up\n"
-            "automatically.\n"
-            "\n"
-            "Options can be provided via CLI flags or a JSON config file (--config).\n"
-            "\n"
-            "Config file format:\n"
-            '  { "server": "http://certpost:8443",\n'
-            '    "domain": "app.example.com",\n'
-            '    "token": "your-api-token",\n'
-            '    "output_dir": "/etc/ssl/certs",\n'
-            '    "refresh_hours": 24 }'
+            "automatically. Options can be provided via CLI flags or a JSON\n"
+            "config file (--config). Use 'certpost init' to create a config."
         ),
     )
     fetch_cmd.add_argument(
@@ -168,19 +160,7 @@ def _create_parser() -> ArgsParser:
             "certpost server, terminates TLS using SNI to select the right\n"
             "certificate, and forwards plaintext traffic to backend servers.\n"
             "Certificates are refreshed automatically (default: every 24 hours).\n"
-            "\n"
-            "Requires a JSON config file. Use 'certpost init' to create one,\n"
-            "or write it manually:\n"
-            "\n"
-            '  { "server": "http://certpost:8443",\n'
-            '    "listen": "0.0.0.0:443",\n'
-            '    "refresh_hours": 24,\n'
-            '    "routes": {\n'
-            '      "app.example.com": {\n'
-            '        "token": "your-api-token",\n'
-            '        "backend": "127.0.0.1:8080"\n'
-            "      }\n"
-            "    } }"
+            "Requires a JSON config file. Use 'certpost init' to create one."
         ),
     )
     proxy_cmd.add_argument(
