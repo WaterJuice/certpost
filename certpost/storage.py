@@ -77,10 +77,8 @@ class Storage:
         config_path = self._data_dir / "config.json"
         if not config_path.exists():
             default_config: JsonDict = {
-                "namecheap_api_user": "",
-                "namecheap_api_key": "",
-                "namecheap_username": "",
-                "namecheap_client_ip": "",
+                "cloudflare_api_token": "",
+                "cloudflare_zone_id": "",
                 "base_domain": "",
                 "acme_email": "",
                 "acme_directory": "https://acme-v02.api.letsencrypt.org/directory",

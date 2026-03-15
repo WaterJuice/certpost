@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
 from typing import Any
 from .acme import AcmeClient
-from .namecheap import NamecheapClient
+from .cloudflare import CloudflareClient
 from .renewal import RenewalThread
 from .storage import Storage
 
@@ -263,14 +263,14 @@ class _CertpostHandler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------------------------
     def _handle_get_config(self) -> None:
-        """Return the current configuration (with API key masked)."""
+        """Return the current configuration (with API token masked)."""
         assert _storage is not None
         config = _storage.get_config()
-        # Mask the API key
-        if config.get("namecheap_api_key"):
-            key = str(config["namecheap_api_key"])
-            config["namecheap_api_key"] = (
-                key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
+        # Mask the API token
+        if config.get("cloudflare_api_token"):
+            token = str(config["cloudflare_api_token"])
+            config["cloudflare_api_token"] = (
+                token[:4] + "****" + token[-4:] if len(token) > 8 else "****"
             )
         self._send_json(config)
 
@@ -282,10 +282,10 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         if body is None:
             return
 
-        # Merge with existing config, don't overwrite API key if masked
+        # Merge with existing config, don't overwrite API token if masked
         config = _storage.get_config()
         for key, value in body.items():
-            if key == "namecheap_api_key" and "****" in str(value):
+            if key == "cloudflare_api_token" and "****" in str(value):
                 continue
             config[key] = value
 
@@ -372,17 +372,15 @@ def run_server(host: str, port: int, data_dir: str) -> None:
 
     _storage = Storage(data_dir)
 
-    # Initialise Namecheap client from config
+    # Initialise Cloudflare client from config
     config = _storage.get_config()
-    namecheap = NamecheapClient(
-        api_user=str(config.get("namecheap_api_user", "")),
-        api_key=str(config.get("namecheap_api_key", "")),
-        username=str(config.get("namecheap_username", "")),
-        client_ip=str(config.get("namecheap_client_ip", "")),
+    cloudflare = CloudflareClient(
+        api_token=str(config.get("cloudflare_api_token", "")),
+        zone_id=str(config.get("cloudflare_zone_id", "")),
     )
 
     # Initialise ACME client
-    _acme_client = AcmeClient(_storage, namecheap)
+    _acme_client = AcmeClient(_storage, cloudflare)
     try:
         _acme_client.initialise()
     except Exception:

@@ -2,7 +2,7 @@
 
 - Initial release
 - Let's Encrypt certificate issuance via ACME v2 with DNS-01 challenges
-- Namecheap DNS API integration for automated TXT record management
+- Cloudflare DNS API integration for automated TXT record management
 - Web admin panel for managing subdomains, API tokens, and configuration
 - Background certificate renewal (30-day window, daily checks)
 - Bearer token authenticated API for certificate retrieval

@@ -4,7 +4,7 @@ This file provides guidance for AI agents working on this project.
 
 ## Project Overview
 
-certpost is a Let's Encrypt certificate manager service. It provides a web admin panel for managing subdomains and API tokens, automatically issues and renews certificates using DNS-01 challenges via the Namecheap API, and exposes an API for other services to retrieve certificates. The client tool (`certpost`) fetches certificates from the server and saves them locally; the server runs as `certpost-server`.
+certpost is a Let's Encrypt certificate manager service. It provides a web admin panel for managing subdomains and API tokens, automatically issues and renews certificates using DNS-01 challenges via the Cloudflare API, and exposes an API for other services to retrieve certificates. The client tool (`certpost`) fetches certificates from the server and saves them locally; the server runs as `certpost-server`.
 
 **Zero pip dependencies** — stdlib only plus system `openssl`. No asyncio; uses threading.
 
@@ -91,7 +91,7 @@ certpost/
 ├── client_cli.py     # Client CLI (certpost)
 ├── server.py         # HTTP server (admin panel + cert API)
 ├── acme.py           # ACME v2 client (Let's Encrypt) using urllib + openssl
-├── namecheap.py      # Namecheap DNS API client
+├── cloudflare.py      # Cloudflare DNS API client (for DNS-01 challenges)
 ├── storage.py        # JSON file storage (~/.certpost/)
 ├── crypto.py         # OpenSSL subprocess wrappers (key gen, CSR, JWS)
 ├── renewal.py        # Background certificate renewal thread
@@ -107,13 +107,13 @@ certpost/
 - Cert retrieval API at `/api/cert/<subdomain>` authenticated by bearer token
 - Background renewal thread checks daily, renews certs within 30 days of expiry
 - Storage in `~/.certpost/` as JSON files
-- Thread safety via `threading.Lock` on file writes and Namecheap API calls
+- Thread safety via `threading.Lock` on file writes and Cloudflare API calls
 
 ### ACME / Let's Encrypt
 - Implements ACME v2 protocol using `urllib.request`
-- DNS-01 challenge: sets `_acme-challenge.<fqdn>` TXT record via Namecheap API
+- DNS-01 challenge: sets `_acme-challenge.<fqdn>` TXT record via Cloudflare API
 - Crypto operations (key gen, CSR, JWS signing) via system `openssl` subprocess
-- Namecheap `setHosts` replaces all records — always fetch existing before writing
+- Cloudflare `setHosts` replaces all records — always fetch existing before writing
 
 ### Client (`certpost`)
 - Simple tool to fetch certificates from a certpost server

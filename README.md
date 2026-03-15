@@ -1,12 +1,12 @@
 # certpost
 
-Let's Encrypt certificate manager with DNS-01 via Namecheap and API access.
+Let's Encrypt certificate manager with DNS-01 via Cloudflare and API access.
 
 ## Features
 
 - Web admin panel for managing subdomains and API tokens
 - Automatic certificate issuance via Let's Encrypt (ACME v2, DNS-01 challenge)
-- DNS record management via the Namecheap API
+- DNS record management via the Cloudflare API
 - Background certificate renewal (30-day window, daily checks)
 - API for retrieving certificates, authenticated by bearer token
 - Companion client tool for fetching and saving certificates locally
@@ -39,7 +39,7 @@ certpost-server --port 8443
 certpost-server --data-dir /etc/certpost
 ```
 
-The admin panel is available at `http://localhost:8443`. Configure your Namecheap API credentials and ACME email via the Configuration tab.
+The admin panel is available at `http://localhost:8443`. Configure your Cloudflare API credentials and ACME email via the Configuration tab.
 
 ### Configuration
 
@@ -47,10 +47,8 @@ On first run, certpost-server creates `~/.certpost/` with a default `config.json
 
 ```json
 {
-  "namecheap_api_user": "",
-  "namecheap_api_key": "",
-  "namecheap_username": "",
-  "namecheap_client_ip": "",
+  "cloudflare_api_token": "",
+  "cloudflare_zone_id": "",
   "base_domain": "",
   "acme_email": "",
   "acme_directory": "https://acme-v02.api.letsencrypt.org/directory",

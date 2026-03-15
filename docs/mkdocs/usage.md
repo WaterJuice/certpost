@@ -42,10 +42,8 @@ On first run, certpost-server creates `~/.certpost/` with a default `config.json
 
 ```json
 {
-  "namecheap_api_user": "",
-  "namecheap_api_key": "",
-  "namecheap_username": "",
-  "namecheap_client_ip": "",
+  "cloudflare_api_token": "",
+  "cloudflare_zone_id": "",
   "base_domain": "",
   "acme_email": "",
   "acme_directory": "https://acme-v02.api.letsencrypt.org/directory",
@@ -61,7 +59,7 @@ The admin panel has three tabs:
 
 - **Domains** — add subdomains to manage, view certificate status and expiry dates
 - **API Tokens** — create and revoke bearer tokens for API access
-- **Configuration** — set Namecheap API credentials, base domain, and ACME settings
+- **Configuration** — set Cloudflare API credentials, base domain, and ACME settings
 
 ### API endpoints
 

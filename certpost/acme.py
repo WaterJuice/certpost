@@ -22,12 +22,12 @@ import time
 import urllib.error
 import urllib.request
 from typing import Any
+from .cloudflare import CloudflareClient
 from .crypto import build_jws
 from .crypto import create_csr
 from .crypto import dns_challenge_value
 from .crypto import generate_rsa_key
 from .crypto import parse_cert_expiry
-from .namecheap import NamecheapClient
 from .storage import Storage
 
 # ----------------------------------------------------------------------------------------
@@ -59,10 +59,10 @@ class AcmeClient:
     #   Construction
     # ------------------------------------------------------------------------------------
 
-    def __init__(self, storage: Storage, namecheap: NamecheapClient) -> None:
+    def __init__(self, storage: Storage, cloudflare: CloudflareClient) -> None:
         """Initialise the ACME client."""
         self._storage = storage
-        self._namecheap = namecheap
+        self._cloudflare = cloudflare
         self._directory: JsonDict = {}
         self._account_key_pem: str = ""
         self._account_kid: str = ""
@@ -179,9 +179,6 @@ class AcmeClient:
     # ------------------------------------------------------------------------------------
     def issue_certificate(self, fqdn: str) -> JsonDict:
         """Issue a certificate for the given FQDN. Returns cert data dict."""
-        config = self._storage.get_config()
-        base_domain = str(config.get("base_domain", ""))
-
         self._log(f"Ordering certificate for {fqdn}...")
 
         # Create order
@@ -213,9 +210,9 @@ class AcmeClient:
             challenge_value = dns_challenge_value(token, self._account_key_pem)
 
             # Set DNS TXT record
-            acme_hostname = f"_acme-challenge.{fqdn}".replace(f".{base_domain}", "")
-            self._log(f"Setting TXT record: {acme_hostname} = {challenge_value}")
-            self._namecheap.set_txt_record(base_domain, acme_hostname, challenge_value)
+            acme_record_name = f"_acme-challenge.{fqdn}"
+            self._log(f"Setting TXT record: {acme_record_name} = {challenge_value}")
+            self._cloudflare.set_txt_record(acme_record_name, challenge_value)
 
             # Wait for DNS propagation
             self._log(f"Waiting {_DNS_PROPAGATION_WAIT}s for DNS propagation...")
@@ -241,7 +238,7 @@ class AcmeClient:
 
             # Clean up DNS record
             self._log("Cleaning up TXT record...")
-            self._namecheap.remove_txt_record(base_domain, acme_hostname)
+            self._cloudflare.remove_txt_record(acme_record_name)
 
         # Generate cert key and CSR
         self._log("Generating certificate key and CSR...")

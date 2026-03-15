@@ -13,9 +13,9 @@ license = "Unlicense"
 authors = [
     { name = "WaterJuice" },
 ]
-description = "Let's Encrypt certificate manager with DNS-01 via Namecheap and API access"
+description = "Let's Encrypt certificate manager with DNS-01 via Cloudflare and API access"
 readme = "README.md"
-keywords = ["certificates", "letsencrypt", "acme", "ssl", "tls", "namecheap", "dns"]
+keywords = ["certificates", "letsencrypt", "acme", "ssl", "tls", "cloudflare", "dns"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

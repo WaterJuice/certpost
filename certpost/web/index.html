@@ -328,20 +328,12 @@
                 <div class="section-body">
                     <div class="config-grid">
                         <div class="form-group">
-                            <label>Namecheap API User</label>
-                            <input type="text" id="cfg-api-user">
+                            <label>Cloudflare API Token</label>
+                            <input type="password" id="cfg-api-token">
                         </div>
                         <div class="form-group">
-                            <label>Namecheap API Key</label>
-                            <input type="password" id="cfg-api-key">
-                        </div>
-                        <div class="form-group">
-                            <label>Namecheap Username</label>
-                            <input type="text" id="cfg-username">
-                        </div>
-                        <div class="form-group">
-                            <label>Client IP</label>
-                            <input type="text" id="cfg-client-ip">
+                            <label>Cloudflare Zone ID</label>
+                            <input type="text" id="cfg-zone-id">
                         </div>
                         <div class="form-group">
                             <label>Base Domain</label>
@@ -466,10 +458,8 @@
         // Config
         async function loadConfig() {
             const data = await api('GET', '/api/config');
-            document.getElementById('cfg-api-user').value = data.namecheap_api_user || '';
-            document.getElementById('cfg-api-key').value = data.namecheap_api_key || '';
-            document.getElementById('cfg-username').value = data.namecheap_username || '';
-            document.getElementById('cfg-client-ip').value = data.namecheap_client_ip || '';
+            document.getElementById('cfg-api-token').value = data.cloudflare_api_token || '';
+            document.getElementById('cfg-zone-id').value = data.cloudflare_zone_id || '';
             document.getElementById('cfg-base-domain').value = data.base_domain || '';
             document.getElementById('cfg-acme-email').value = data.acme_email || '';
             document.getElementById('cfg-acme-directory').value = data.acme_directory || '';
@@ -477,10 +467,8 @@
 
         async function saveConfig() {
             await api('POST', '/api/config', {
-                namecheap_api_user: document.getElementById('cfg-api-user').value,
-                namecheap_api_key: document.getElementById('cfg-api-key').value,
-                namecheap_username: document.getElementById('cfg-username').value,
-                namecheap_client_ip: document.getElementById('cfg-client-ip').value,
+                cloudflare_api_token: document.getElementById('cfg-api-token').value,
+                cloudflare_zone_id: document.getElementById('cfg-zone-id').value,
                 base_domain: document.getElementById('cfg-base-domain').value,
                 acme_email: document.getElementById('cfg-acme-email').value,
                 acme_directory: document.getElementById('cfg-acme-directory').value,

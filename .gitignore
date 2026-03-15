@@ -42,5 +42,8 @@ htmlcov/
 # Generated
 certpost/_version.py
 
+# Local data
+/local
+
 # macOS
 .DS_Store
