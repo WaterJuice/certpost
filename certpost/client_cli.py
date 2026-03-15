@@ -202,10 +202,10 @@ def _run_init(args: Namespace) -> int:
     print("\ncertpost config generator")
     print("Press Enter to skip any field — you can fill it in later.\n")
 
-    print("What type of config?")
-    print("  1. fetch  — fetch certificates and save to disk")
-    print("  2. proxy  — TLS termination proxy with SNI routing")
-    mode = _prompt("Choose [1/2]", "1")
+    print("What do you need?")
+    print("  1. fetch  — download cert files to disk (one-shot or scheduled)")
+    print("  2. proxy  — TLS termination proxy (auto-fetches and refreshes certs)")
+    mode = _prompt("Choose [1/2]", "2")
 
     server = _prompt("certpost server URL (e.g. http://certpost.example.com:8443)")
 
