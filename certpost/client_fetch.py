@@ -57,8 +57,8 @@ def save_cert(output_dir: pathlib.Path, domain: str, cert_data: JsonDict) -> Non
     """Save certificate files to disk."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    cert_path = output_dir / f"{domain}.crt"
-    key_path = output_dir / f"{domain}.key"
+    cert_path = output_dir / f"{domain}.crt.pem"
+    key_path = output_dir / f"{domain}.key.pem"
 
     cert_pem = cert_data.get("cert_pem", "")
     chain_pem = cert_data.get("chain_pem", "")
