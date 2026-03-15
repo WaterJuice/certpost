@@ -2,7 +2,7 @@
 #   cli.py
 #   ------
 #
-#   CLI argument parsing and server launch for certpost.
+#   CLI argument parsing and server launch for certpost-server.
 #
 #   (c) 2026 WaterJuice — Released under the Unlicense; see LICENSE.
 #
@@ -41,6 +41,8 @@ means.
 
 For more information, please refer to <https://unlicense.org/>"""
 
+_TOKEN_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
+
 # ----------------------------------------------------------------------------------------
 #   Functions
 # ----------------------------------------------------------------------------------------
@@ -48,7 +50,7 @@ For more information, please refer to <https://unlicense.org/>"""
 
 # ----------------------------------------------------------------------------------------
 def _create_parser() -> ArgsParser:
-    """Build the argument parser."""
+    """Build the argument parser with subcommands."""
     parser = ArgsParser(
         prog="certpost-server",
         description="Let's Encrypt certificate manager with DNS-01 via Cloudflare.",
@@ -61,13 +63,10 @@ def _create_parser() -> ArgsParser:
         dest="license",
         help="Show licence information and exit",
     )
-    parser.add_argument(
-        "--setup",
-        action="store_true",
-        dest="setup",
-        help="Run interactive setup wizard for config.json",
-    )
-    parser.add_argument(
+
+    # 'run' command
+    run_cmd = parser.add_command("run", help="Start the certpost server")
+    run_cmd.add_argument(
         "--port",
         "-p",
         type=int,
@@ -75,7 +74,7 @@ def _create_parser() -> ArgsParser:
         metavar="PORT",
         help="Port to listen on (default: 8443)",
     )
-    parser.add_argument(
+    run_cmd.add_argument(
         "--host",
         "-H",
         type=str,
@@ -83,7 +82,20 @@ def _create_parser() -> ArgsParser:
         metavar="HOST",
         help="Host to bind to (default: 0.0.0.0)",
     )
-    parser.add_argument(
+    run_cmd.add_argument(
+        "--data-dir",
+        "-d",
+        type=str,
+        default="",
+        metavar="DIR",
+        help="Data directory (default: ~/.certpost)",
+    )
+
+    # 'setup' command
+    setup_cmd = parser.add_command(
+        "setup", help="Interactive setup wizard for config.json"
+    )
+    setup_cmd.add_argument(
         "--data-dir",
         "-d",
         type=str,
@@ -153,8 +165,7 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     # Generate admin key if not present
     admin_key = str(existing.get("admin_key", ""))
     if not admin_key:
-        token_chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-        admin_key = "".join(secrets.choice(token_chars) for _ in range(40))
+        admin_key = "".join(secrets.choice(_TOKEN_CHARS) for _ in range(40))
 
     config: dict[str, object] = {
         "cloudflare_api_token": cf_token,
@@ -182,6 +193,13 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     print(f"\nConfig saved to {config_path}")
     print(f"Admin key: {admin_key}")
     print()
+
+
+# ----------------------------------------------------------------------------------------
+def _resolve_data_dir(args: Namespace) -> pathlib.Path:
+    """Resolve the data directory from args."""
+    data_dir = args.data_dir if args.data_dir else ""
+    return pathlib.Path(data_dir) if data_dir else pathlib.Path.home() / ".certpost"
 
 
 # ----------------------------------------------------------------------------------------
@@ -217,24 +235,30 @@ def _main_inner() -> int:
     parser = _create_parser()
     args: Namespace = parser.parse()
 
-    data_dir = args.data_dir if args.data_dir else ""
-    data_dir_path = (
-        pathlib.Path(data_dir) if data_dir else pathlib.Path.home() / ".certpost"
-    )
+    command = args.command if hasattr(args, "command") else None
 
-    # Run setup wizard if requested
-    if args.setup:
-        _run_setup(data_dir_path)
+    if command == "setup":
+        _run_setup(_resolve_data_dir(args))
         return 0
 
-    print(
-        f"certpost-server {VERSION_STR}",
-        file=sys.stderr,
-    )
-    print(
-        f"Serving on http://{args.host}:{args.port}",
-        file=sys.stderr,
-    )
+    if command == "run":
+        data_dir = args.data_dir if args.data_dir else ""
+        data_dir_path = _resolve_data_dir(args)
+        config_path = data_dir_path / "config.json"
 
-    run_server(host=args.host, port=args.port, data_dir=data_dir)
+        if not config_path.exists():
+            print(
+                f"No config found at {config_path}\n"
+                f"Run 'certpost-server setup' to create one, or specify --data-dir.",
+                file=sys.stderr,
+            )
+            return 1
+
+        print(f"certpost-server {VERSION_STR}", file=sys.stderr)
+        print(f"Serving on http://{args.host}:{args.port}", file=sys.stderr)
+        run_server(host=args.host, port=args.port, data_dir=data_dir)
+        return 0
+
+    # No command given — show help
+    parser.parse(["--help"])
     return 0
