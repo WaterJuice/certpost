@@ -124,6 +124,17 @@ def _create_parser() -> ArgsParser:
         help="Config file (JSON) instead of CLI args",
     )
 
+    # 'init' command — generate a config file
+    init_cmd = parser.add_command("init", help="Generate a config file interactively")
+    init_cmd.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="certpost.json",
+        metavar="FILE",
+        help="Output config file path (default: certpost.json)",
+    )
+
     # 'proxy' command — TLS termination proxy
     proxy_cmd = parser.add_command(
         "proxy", help="TLS termination proxy with SNI routing"
@@ -163,6 +174,103 @@ def _load_config(config_path: str) -> JsonDict:
     if not path.exists():
         raise RuntimeError(f"Config file not found: {config_path}")
     return json.loads(path.read_text())  # pyright: ignore[reportReturnType]
+
+
+# ----------------------------------------------------------------------------------------
+def _prompt(label: str, default: str = "") -> str:
+    """Prompt for input with an optional default."""
+    if default:
+        result = input(f"  {label} [{default}]: ").strip()
+        return result if result else default
+    result = input(f"  {label}: ").strip()
+    return result
+
+
+# ----------------------------------------------------------------------------------------
+def _run_init(args: Namespace) -> int:
+    """Generate a config file interactively."""
+    output_path = pathlib.Path(args.output)
+
+    if output_path.exists():
+        overwrite = (
+            input(f"{output_path} already exists. Overwrite? [y/N]: ").strip().lower()
+        )
+        if overwrite != "y":
+            print("Aborted.", file=sys.stderr)
+            return 1
+
+    print("\ncertpost config generator")
+    print("Press Enter to skip any field — you can fill it in later.\n")
+
+    print("What type of config?")
+    print("  1. fetch  — fetch certificates and save to disk")
+    print("  2. proxy  — TLS termination proxy with SNI routing")
+    mode = _prompt("Choose [1/2]", "1")
+
+    server = _prompt("certpost server URL (e.g. http://certpost.example.com:8443)")
+
+    if mode == "2":
+        config = _build_proxy_config(server)
+    else:
+        config = _build_fetch_config(server)
+
+    tmp = output_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(config, indent=2) + "\n")
+    tmp.rename(output_path)
+
+    print(f"\nConfig saved to {output_path}")
+    if mode == "2":
+        print(f"Run with: certpost proxy -c {output_path}")
+    else:
+        print(f"Run with: certpost fetch -c {output_path}")
+    print()
+    return 0
+
+
+# ----------------------------------------------------------------------------------------
+def _build_fetch_config(server: str) -> JsonDict:
+    """Build a fetch config interactively."""
+    print("\nFetch settings:")
+    domain = _prompt("Domain (e.g. app.example.com)")
+    token = _prompt("API token for this domain")
+    output_dir = _prompt("Output directory for cert files", ".")
+    refresh_str = _prompt("Refresh interval in hours (0 = once)", "0")
+    refresh_hours = int(refresh_str) if refresh_str.isdigit() else 0
+
+    return {
+        "server": server,
+        "domain": domain,
+        "token": token,
+        "output_dir": output_dir,
+        "refresh_hours": refresh_hours,
+    }
+
+
+# ----------------------------------------------------------------------------------------
+def _build_proxy_config(server: str) -> JsonDict:
+    """Build a proxy config interactively."""
+    print("\nProxy settings:")
+    listen = _prompt("Listen address", "0.0.0.0:443")
+    refresh_str = _prompt("Certificate refresh interval in hours", "24")
+    refresh_hours = int(refresh_str) if refresh_str.isdigit() else 24
+
+    routes: dict[str, JsonDict] = {}
+    print("\nAdd routes (domain -> backend). Enter empty domain to finish.\n")
+    while True:
+        domain = _prompt("Domain (e.g. app.example.com)")
+        if not domain:
+            break
+        token = _prompt(f"  API token for {domain}")
+        backend = _prompt(f"  Backend address for {domain} (e.g. 127.0.0.1:8080)")
+        routes[domain] = {"token": token, "backend": backend}
+        print()
+
+    return {
+        "server": server,
+        "listen": listen,
+        "refresh_hours": refresh_hours,
+        "routes": routes,
+    }
 
 
 # ----------------------------------------------------------------------------------------
@@ -286,6 +394,9 @@ def _main_inner() -> int:
     args: Namespace = parser.parse()
 
     command = args.command if hasattr(args, "command") else None
+
+    if command == "init":
+        return _run_init(args)
 
     if command == "fetch":
         return _run_fetch(args)
