@@ -12,6 +12,10 @@
 #   Mar 2026 - Created
 # ----------------------------------------------------------------------------------------
 
+# pyright: reportMissingImports=false
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownArgumentType=false
+
 # ----------------------------------------------------------------------------------------
 #   Version
 # ----------------------------------------------------------------------------------------
@@ -19,11 +23,9 @@
 
 def _get_version() -> str:
     try:
-        # fmt: off
-        from ._version import __version__ as _v  # pyright: ignore[reportMissingImports,reportUnknownVariableType]  # noqa: I001
-        # fmt: on
+        from ._version import __version__ as _v  # noqa: I001
 
-        return str(_v)  # pyright: ignore[reportUnknownArgumentType]
+        return str(_v)
     except ImportError:
         return "dev"
 
