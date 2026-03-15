@@ -249,10 +249,13 @@ def run_proxy(config: JsonDict, listen_addr: str) -> None:
     # Start background refresh
     refresher.start()
 
-    # SNI callback
+    # SNI callback — capture the server name for routing
+    _last_sni: list[str] = [""]
+
     def _sni_callback(
         ssl_socket: ssl.SSLObject, server_name: str | None, _ctx: ssl.SSLContext
     ) -> int | None:
+        _last_sni[0] = server_name or ""
         if server_name and cert_store.has_domain(server_name):
             new_ctx = cert_store.get_context(server_name)
             if new_ctx:
@@ -304,8 +307,9 @@ def run_proxy(config: JsonDict, listen_addr: str) -> None:
                 continue
 
             # Determine backend from SNI
-            server_name = ssl_sock.server_hostname  # pyright: ignore[reportAttributeAccessIssue]
-            backend = backend_map.get(str(server_name or ""), "")
+            server_name = _last_sni[0]
+            _last_sni[0] = ""
+            backend = backend_map.get(server_name, "")
             if not backend:
                 print(
                     f"  [proxy] No route for {server_name} from {addr}",
