@@ -23,7 +23,7 @@
 
 def _get_version() -> str:
     try:
-        from ._version import __version__ as _v  # noqa: I001
+        from ._version import __version__ as _v
 
         return str(_v)
     except ImportError:
