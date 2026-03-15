@@ -138,9 +138,11 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     existing: dict[str, str | int] = {}
     if config_path.exists():
         existing = json.loads(config_path.read_text())
-        print(f"\nUpdating existing config at {config_path}\n")
+        print(f"\nUpdating existing config at {config_path}")
     else:
-        print(f"\nCreating new config at {config_path}\n")
+        print(f"\nCreating new config at {config_path}")
+
+    print("Press Enter to skip any field — you can fill it in later.\n")
 
     print("Cloudflare DNS settings:")
     cf_token = _prompt(
