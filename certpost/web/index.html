@@ -481,9 +481,9 @@
             const data = await res.json();
 
             // Download .crt first, then .key after a short delay so browser allows both
-            downloadFile(subdomain + '.crt.pem', (data.cert_pem || '') + (data.chain_pem || ''));
+            downloadFile(subdomain + '.crt', (data.cert_pem || '') + (data.chain_pem || ''));
             setTimeout(() => {
-                downloadFile(subdomain + '.key.pem', data.key_pem || '');
+                downloadFile(subdomain + '.key', data.key_pem || '');
             }, 500);
         }
 
