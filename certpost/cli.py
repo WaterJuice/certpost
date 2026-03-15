@@ -153,7 +153,8 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     # Generate admin key if not present
     admin_key = str(existing.get("admin_key", ""))
     if not admin_key:
-        admin_key = secrets.token_urlsafe(32)
+        token_chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        admin_key = "".join(secrets.choice(token_chars) for _ in range(40))
 
     config: dict[str, object] = {
         "cloudflare_api_token": cf_token,

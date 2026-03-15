@@ -29,6 +29,8 @@ from typing import Any
 # ----------------------------------------------------------------------------------------
 
 _DEFAULT_DATA_DIR = pathlib.Path.home() / ".certpost"
+_TOKEN_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
+_TOKEN_LENGTH = 40
 
 # ----------------------------------------------------------------------------------------
 #   Types
@@ -80,7 +82,9 @@ class Storage:
                 "cloudflare_api_token": "",
                 "cloudflare_zone_id": "",
                 "base_domain": "",
-                "admin_key": secrets.token_urlsafe(32),
+                "admin_key": "".join(
+                    secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH)
+                ),
                 "port": 8443,
             }
             self._write_json(config_path, default_config)
@@ -130,7 +134,7 @@ class Storage:
     # ------------------------------------------------------------------------------------
     def create_session(self) -> str:
         """Create a new admin session token."""
-        token = secrets.token_urlsafe(32)
+        token = "".join(secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH))
         config = self.get_config()
         sessions: list[str] = config.get("sessions", [])  # pyright: ignore[reportAssignmentType]
         sessions.append(token)
@@ -170,7 +174,9 @@ class Storage:
             "subdomain": subdomain,
             "ip_address": ip_address,
             "status": "pending",
-            "api_token": secrets.token_urlsafe(32),
+            "api_token": "".join(
+                secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH)
+            ),
             "added_at": datetime.datetime.now(datetime.UTC).isoformat(),
             "cert_expires_at": None,
             "last_error": None,
@@ -203,7 +209,7 @@ class Storage:
     # ------------------------------------------------------------------------------------
     def rotate_domain_token(self, subdomain: str) -> str:
         """Generate a new API token for a domain. Returns the new token."""
-        new_token = secrets.token_urlsafe(32)
+        new_token = "".join(secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH))
         self.update_domain(subdomain, {"api_token": new_token})
         return new_token
 
