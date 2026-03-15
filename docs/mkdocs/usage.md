@@ -47,6 +47,7 @@ The `config.json` in your data directory:
   "cloudflare_zone_id": "your-zone-id",
   "base_domain": "example.com",
   "admin_key": "auto-generated-login-key",
+  "bind": "0.0.0.0",
   "port": 8443
 }
 ```

@@ -161,6 +161,7 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     )
 
     print("\nServer settings:")
+    bind = _prompt("Bind address", str(existing.get("bind", "0.0.0.0")))
     port_str = _prompt("Port", str(existing.get("port", 8443)))
     port = int(port_str) if port_str.isdigit() else 8443
 
@@ -174,6 +175,7 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
         "cloudflare_zone_id": cf_zone,
         "base_domain": base_domain,
         "admin_key": admin_key,
+        "bind": bind,
         "port": port,
     }
 
@@ -254,9 +256,18 @@ def _main_inner() -> int:
             )
             return 1
 
+        # CLI flags override config values
+        import json
+
+        config = json.loads(config_path.read_text())
+        host = (
+            args.host if args.host != "0.0.0.0" else str(config.get("bind", "0.0.0.0"))
+        )
+        port = args.port if args.port != 8443 else int(config.get("port", 8443))
+
         print(f"certpost-server {VERSION_STR}", file=sys.stderr)
-        print(f"Serving on http://{args.host}:{args.port}", file=sys.stderr)
-        run_server(host=args.host, port=args.port, data_dir=args.data_dir)
+        print(f"Serving on http://{host}:{port}", file=sys.stderr)
+        run_server(host=host, port=port, data_dir=args.data_dir)
         return 0
 
     # No command given — show help

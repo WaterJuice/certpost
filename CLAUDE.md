@@ -153,7 +153,7 @@ Three subcommands: `fetch`, `proxy`, `init`. No command shows help.
 ### Storage
 
 - All data in a user-specified directory (`--data-dir`, no default)
-- `config.json` — Cloudflare credentials, base domain, admin key, port
+- `config.json` — Cloudflare credentials, base domain, admin key, bind address, port
 - `domains.json` — managed domains with status, IP, per-domain API tokens
 - `certs/<domain>/cert.json` — certificate PEM data with ISO timestamps
 - `acme_account.json` — ACME account key and registration URL
