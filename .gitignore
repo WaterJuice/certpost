@@ -42,8 +42,9 @@ htmlcov/
 # Generated
 certpost/_version.py
 
-# Local data
+# Local data and generated configs
 /local
+certpost.json
 
 # Claude
 .claude/
