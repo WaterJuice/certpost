@@ -341,7 +341,8 @@ def _validate_token(server_url: str, token: str, domain: str) -> bool:
 def _build_proxy_config(server: str) -> JsonDict:
     """Build a proxy config interactively."""
     print("\nProxy settings:")
-    listen = _prompt("Listen address", "0.0.0.0:443")
+    listen_input = _prompt("Listen port or address", "443")
+    listen = f"0.0.0.0:{listen_input}" if listen_input.isdigit() else listen_input
     refresh_str = _prompt("Certificate refresh interval in hours", "24")
     refresh_hours = int(refresh_str) if refresh_str.isdigit() else 24
 
