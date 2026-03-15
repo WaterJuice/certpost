@@ -422,8 +422,9 @@
                             </div>
                         </div>
                         <div class="token-row">
-                            <code>${d.api_token || '\u2014'}</code>
+                            <code id="token-${enc}">${d.api_token ? d.api_token.slice(0, 6) + '\u2026' : '\u2014'}</code>
                             <div class="token-actions">
+                                <button class="btn btn-secondary btn-sm" id="reveal-${enc}" onclick="toggleToken('${enc}', '${d.api_token}')">Show</button>
                                 <button class="btn btn-secondary btn-sm" onclick="copyToken('${d.api_token}')">Copy</button>
                                 <button class="btn btn-secondary btn-sm" onclick="rotateToken('${d.subdomain}')">Rotate</button>
                             </div>
@@ -460,6 +461,18 @@
             if (!confirm('Rotate API token for ' + subdomain + '?\nExisting clients will need the new token.')) return;
             await api('POST', '/api/domains/' + encodeURIComponent(subdomain) + '/rotate');
             loadDomains();
+        }
+
+        function toggleToken(enc, token) {
+            const el = document.getElementById('token-' + enc);
+            const btn = document.getElementById('reveal-' + enc);
+            if (btn.textContent === 'Show') {
+                el.textContent = token;
+                btn.textContent = 'Hide';
+            } else {
+                el.textContent = token.slice(0, 6) + '\u2026';
+                btn.textContent = 'Show';
+            }
         }
 
         function copyToken(token) {
