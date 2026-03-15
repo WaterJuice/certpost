@@ -79,13 +79,7 @@ def _create_parser() -> ArgsParser:
     fetch_cmd = parser.add_command(
         "fetch",
         help="Fetch certificates and save as .crt/.key files",
-        description=(
-            "Download certificates from a certpost server and save them as\n"
-            "<domain>.crt and <domain>.key files. Use --refresh to keep fetching\n"
-            "on a schedule (e.g. every 24 hours) so renewed certs are picked up\n"
-            "automatically. Options can be provided via CLI flags or a JSON\n"
-            "config file (--config). Use 'certpost init' to create a config."
-        ),
+        description="Download certificates from a certpost server and save them as <domain>.crt and <domain>.key files. Use --refresh to keep fetching on a schedule (e.g. every 24 hours) so renewed certs are picked up automatically. Options can be provided via CLI flags or a JSON config file (--config). Use 'certpost init' to create a config.",
     )
     fetch_cmd.add_argument(
         "--server",
@@ -155,13 +149,7 @@ def _create_parser() -> ArgsParser:
     proxy_cmd = parser.add_command(
         "proxy",
         help="TLS termination proxy with auto-refreshing certs",
-        description=(
-            "Run a TLS termination proxy that fetches certificates from a\n"
-            "certpost server, terminates TLS using SNI to select the right\n"
-            "certificate, and forwards plaintext traffic to backend servers.\n"
-            "Certificates are refreshed automatically (default: every 24 hours).\n"
-            "Requires a JSON config file. Use 'certpost init' to create one."
-        ),
+        description="Run a TLS termination proxy that fetches certificates from a certpost server, terminates TLS using SNI to select the right certificate, and forwards plaintext traffic to backend servers. Certificates are refreshed automatically (default: every 24 hours). Requires a JSON config file. Use 'certpost init' to create one.",
     )
     proxy_cmd.add_argument(
         "--config",
