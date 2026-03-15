@@ -21,7 +21,7 @@
 #
 #   Licence: Unlicense - (c) 2026 WaterJuice
 #
-#   Version: 2026-03-08
+#   Version: 2026-03-15
 # ----------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------
@@ -51,6 +51,7 @@ __all__ = [
 # ----------------------------------------------------------------------------------------
 
 import argparse
+import shutil
 import sys
 from argparse import Action
 from argparse import Namespace
@@ -974,12 +975,16 @@ class ArgsCommand(_BaseClass):
     def __add_to_sub_parser__(
         self, sub_parsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     ) -> None:
+        def _formatter(prog: str, **kwargs: Any) -> _FixedHelpFormatter:
+            width = shutil.get_terminal_size().columns
+            return _FixedHelpFormatter(prog, width=width, **kwargs)
+
         command_parser = sub_parsers.add_parser(
             name=self._command_name,
             description=self._description,
             help=self._help,
             add_help=False,
-            formatter_class=_FixedHelpFormatter,
+            formatter_class=_formatter,
         )
         command_parser.add_argument(
             "--help", "-h", action="help", help=argparse.SUPPRESS
