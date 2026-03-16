@@ -205,6 +205,38 @@ _OPENAPI_SPEC: dict[str, object] = {
 }
 
 # ----------------------------------------------------------------------------------------
+#   Helpers
+# ----------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------
+def _is_ip_address(value: str) -> bool:
+    """Return True if value looks like an IPv4 address, False if it's a hostname."""
+    parts = value.split(".")
+    if len(parts) != 4:
+        return False
+    return all(p.isdigit() and 0 <= int(p) <= 255 for p in parts)
+
+
+# ----------------------------------------------------------------------------------------
+def _set_dns_record(dns: DnsProvider, fqdn: str, target: str) -> str:
+    """Create the appropriate DNS record (A or CNAME) for the target. Returns the type."""
+    if _is_ip_address(target):
+        dns.set_a_record(fqdn, target)
+        return "A"
+    else:
+        dns.set_cname_record(fqdn, target)
+        return "CNAME"
+
+
+# ----------------------------------------------------------------------------------------
+def _remove_dns_records(dns: DnsProvider, fqdn: str) -> None:
+    """Remove both A and CNAME records for a domain."""
+    dns.remove_a_record(fqdn)
+    dns.remove_cname_record(fqdn)
+
+
+# ----------------------------------------------------------------------------------------
 #   Module State
 # ----------------------------------------------------------------------------------------
 
@@ -311,10 +343,10 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             if self._require_admin():
                 subdomain = path[len("/api/domains/") : -len("/rotate")]
                 self._handle_rotate_token(subdomain)
-        elif path.startswith("/api/domains/") and path.endswith("/ip"):
+        elif path.startswith("/api/domains/") and path.endswith("/target"):
             if self._require_admin():
-                subdomain = path[len("/api/domains/") : -len("/ip")]
-                self._handle_update_ip(subdomain)
+                subdomain = path[len("/api/domains/") : -len("/target")]
+                self._handle_update_target(subdomain)
         else:
             self._send_error(404, "Not found")
 
@@ -423,12 +455,12 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             return
 
         subdomain = body.get("subdomain", "")
-        ip_address = body.get("ip_address", "")
+        target = body.get("target", "")
         if not subdomain:
             self._send_error(400, "Missing subdomain")
             return
-        if not ip_address:
-            self._send_error(400, "Missing IP address")
+        if not target:
+            self._send_error(400, "Missing target")
             return
 
         config = _storage.get_config()
@@ -443,20 +475,20 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             else subdomain
         )
 
-        entry = _storage.add_domain(fqdn, ip_address)
+        entry = _storage.add_domain(fqdn, target)
         self._send_json(entry)
 
-        # Create A record and issue certificate in background thread
+        # Create DNS record and issue certificate in background thread
         acme = _acme_client
         cf = _dns_client
         storage = _storage
 
         def _setup() -> None:
             try:
-                # Create A record
+                # Create A or CNAME record
                 assert cf is not None
-                cf.set_a_record(fqdn, ip_address)
-                _log("server", f"A record created: {fqdn} -> {ip_address}")
+                record_type = _set_dns_record(cf, fqdn, target)
+                _log("server", f"{record_type} record created: {fqdn} -> {target}")
                 # Issue certificate
                 acme.issue_certificate(fqdn)
             except Exception as e:
@@ -470,23 +502,23 @@ class _CertpostHandler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------------------------
     def _handle_remove_domain(self, subdomain: str) -> None:
-        """Remove a subdomain and its A record."""
+        """Remove a subdomain and its DNS records."""
         assert _storage is not None
         subdomain = urllib.parse.unquote(subdomain)
 
-        # Remove A record from DNS
+        # Remove DNS records (both A and CNAME)
         if _dns_client is not None:
             try:
-                _dns_client.remove_a_record(subdomain)
+                _remove_dns_records(_dns_client, subdomain)
             except Exception as e:
-                _log("server", f"Failed to remove A record for {subdomain}: {e}")
+                _log("server", f"Failed to remove DNS records for {subdomain}: {e}")
 
         _storage.remove_domain(subdomain)
         self._send_json({"status": "removed"})
 
     # ------------------------------------------------------------------------------------
-    def _handle_update_ip(self, subdomain: str) -> None:
-        """Update the IP address for a domain."""
+    def _handle_update_target(self, subdomain: str) -> None:
+        """Update the DNS target (IP address or CNAME) for a domain."""
         assert _storage is not None
         subdomain = urllib.parse.unquote(subdomain)
 
@@ -494,22 +526,23 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         if body is None:
             return
 
-        ip_address = body.get("ip_address", "")
-        if not ip_address:
-            self._send_error(400, "Missing IP address")
+        target = body.get("target", "")
+        if not target:
+            self._send_error(400, "Missing target")
             return
 
-        # Update A record in DNS
+        # Remove old records and create new one
         if _dns_client is not None:
             try:
-                _dns_client.set_a_record(subdomain, ip_address)
-                _log("server", f"A record updated: {subdomain} -> {ip_address}")
+                _remove_dns_records(_dns_client, subdomain)
+                record_type = _set_dns_record(_dns_client, subdomain, target)
+                _log("server", f"{record_type} record updated: {subdomain} -> {target}")
             except Exception as e:
                 self._send_error(500, f"Failed to update DNS: {e}")
                 return
 
-        _storage.update_domain(subdomain, {"ip_address": ip_address})
-        self._send_json({"status": "updated", "ip_address": ip_address})
+        _storage.update_domain(subdomain, {"target": target})
+        self._send_json({"status": "updated", "target": target})
 
     # ------------------------------------------------------------------------------------
     def _handle_rotate_token(self, subdomain: str) -> None:

@@ -154,7 +154,7 @@ class Storage:
         return data.get("domains", [])  # pyright: ignore[reportReturnType]
 
     # ------------------------------------------------------------------------------------
-    def add_domain(self, subdomain: str, ip_address: str) -> JsonDict:
+    def add_domain(self, subdomain: str, target: str) -> JsonDict:
         """Add a new subdomain with a generated API token. Returns the domain entry."""
         data = self._read_json(self._data_dir / "domains.json")
         domains: list[JsonDict] = data.get("domains", [])  # pyright: ignore[reportAssignmentType]
@@ -166,7 +166,7 @@ class Storage:
 
         entry: JsonDict = {
             "subdomain": subdomain,
-            "ip_address": ip_address,
+            "target": target,
             "status": "pending",
             "api_token": "".join(
                 secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH)

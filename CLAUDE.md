@@ -6,7 +6,7 @@ This file provides guidance for AI agents working on this project.
 
 certpost is a Let's Encrypt certificate manager. It has two components:
 
-- **certpost-server** — issues and renews SSL certificates via Let's Encrypt (ACME v2 with DNS-01 challenges via Cloudflare), manages DNS A records, and provides a web admin panel and API for certificate retrieval.
+- **certpost-server** — issues and renews SSL certificates via Let's Encrypt (ACME v2 with DNS-01 challenges via Cloudflare), manages DNS records (A and CNAME), and provides a web admin panel and API for certificate retrieval.
 - **certpost** — client tool that fetches certificates from a certpost server. Can save them as files (`fetch`) or run a TLS termination proxy with SNI routing and automatic certificate refresh (`proxy`).
 
 **Zero pip dependencies** — stdlib only plus system `openssl`. No asyncio; uses threading.
@@ -98,7 +98,7 @@ certpost/
 ├── server.py         # HTTP server (admin panel + cert API + info endpoints)
 ├── proxy.py          # TLS termination proxy with SNI routing and auto-refresh
 ├── acme.py           # ACME v2 client (Let's Encrypt) using urllib + openssl
-├── cloudflare.py     # Cloudflare DNS API client (A records + TXT records)
+├── cloudflare.py     # Cloudflare DNS API client (A/CNAME records + TXT records)
 ├── dns.py            # DNS provider protocol (interface for swapping providers)
 ├── storage.py        # JSON file storage for config, domains, certs
 ├── crypto.py         # OpenSSL subprocess wrappers (key gen, CSR, JWS)
@@ -122,7 +122,7 @@ Server features:
 - Admin panel at `/` protected by admin key login with cookie auth
 - Per-domain API tokens (auto-generated when adding a domain, visible, rotatable)
 - Cert retrieval API at `/api/cert/<domain>` authenticated by per-domain bearer token
-- Creates Cloudflare A records when adding domains, removes them when deleting
+- Creates Cloudflare A or CNAME records when adding domains, removes them when deleting
 - Background renewal thread checks daily, renews certs within 30 days of expiry
 - In-memory log buffer viewable in admin panel Logs tab
 - Info endpoints: `/api/version`, `/api/spec` (OpenAPI 3.0), `/api/help` (plain text)
@@ -130,7 +130,7 @@ Server features:
 
 ### DNS Provider
 
-- `dns.py` defines a `DnsProvider` protocol with `set_txt_record`, `remove_txt_record`, `set_a_record`, `remove_a_record`
+- `dns.py` defines a `DnsProvider` protocol with methods for TXT, A, and CNAME records
 - `cloudflare.py` implements this protocol
 - Easy to add other providers by implementing the protocol
 

@@ -51,7 +51,7 @@ certpost-server run -d /path/to/data
 
 The admin panel is available at `http://localhost:8443`. Log in with the admin key (printed on startup). From the panel you can:
 
-- Add subdomains — enters the IP address, creates the A record in Cloudflare, and issues a Let's Encrypt certificate
+- Add subdomains — enter an IP address or CNAME target, creates the DNS record in Cloudflare, and issues a Let's Encrypt certificate
 - View certificate status and expiry dates
 - Copy or rotate per-domain API tokens
 - Download certificate files

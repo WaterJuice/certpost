@@ -46,3 +46,13 @@ class DnsProvider(Protocol):
     def remove_a_record(self, name: str) -> None:
         """Remove all A records matching the given name."""
         ...
+
+    # ------------------------------------------------------------------------------------
+    def set_cname_record(self, name: str, target: str) -> str:
+        """Create or replace a CNAME record. Returns a record ID."""
+        ...
+
+    # ------------------------------------------------------------------------------------
+    def remove_cname_record(self, name: str) -> None:
+        """Remove all CNAME records matching the given name."""
+        ...

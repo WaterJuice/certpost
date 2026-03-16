@@ -56,16 +56,16 @@ The `config.json` in your data directory:
 
 Open `http://localhost:8443` and log in with your admin key (printed on server startup). The admin panel has two tabs:
 
-**Domains** — add subdomains with an IP address. certpost will:
+**Domains** — add subdomains with a target (IP address or CNAME hostname). certpost will:
 
-- Create an A record in Cloudflare pointing to that IP
+- Create an A or CNAME record in Cloudflare
 - Issue a Let's Encrypt certificate via DNS-01 challenge
 - Generate a per-domain API token
 
 Each domain card shows:
 
 - Status (pending, issuing, issued, error)
-- IP address (editable)
+- Target — IP address or CNAME (editable)
 - Certificate expiry date
 - API token (masked by default, click Show to reveal, Copy to clipboard)
 - Download button for `.crt` and `.key` files

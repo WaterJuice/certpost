@@ -192,3 +192,52 @@ class CloudflareClient:
         )
         records: list[JsonDict] = result.get("result", [])  # pyright: ignore[reportAssignmentType]
         return records
+
+    # ------------------------------------------------------------------------------------
+    def set_cname_record(self, name: str, target: str) -> str:
+        """Create or update a CNAME record. Returns the record ID."""
+        existing = self._find_cname_records(name)
+        for record in existing:
+            record_id = str(record.get("id", ""))
+            if record_id:
+                self._api_call(
+                    "DELETE",
+                    f"/zones/{self._zone_id}/dns_records/{record_id}",
+                )
+
+        result = self._api_call(
+            "POST",
+            f"/zones/{self._zone_id}/dns_records",
+            {
+                "type": "CNAME",
+                "name": name,
+                "content": target,
+                "ttl": 1,
+                "proxied": False,
+            },
+        )
+
+        record_result: JsonDict = result.get("result", {})  # pyright: ignore[reportAssignmentType]
+        return str(record_result.get("id", ""))
+
+    # ------------------------------------------------------------------------------------
+    def remove_cname_record(self, name: str) -> None:
+        """Remove all CNAME records matching the given name."""
+        records = self._find_cname_records(name)
+        for record in records:
+            record_id = str(record.get("id", ""))
+            if record_id:
+                self._api_call(
+                    "DELETE",
+                    f"/zones/{self._zone_id}/dns_records/{record_id}",
+                )
+
+    # ------------------------------------------------------------------------------------
+    def _find_cname_records(self, name: str) -> list[JsonDict]:
+        """Find CNAME records matching the given name."""
+        result = self._api_call(
+            "GET",
+            f"/zones/{self._zone_id}/dns_records?type=CNAME&name={name}",
+        )
+        records: list[JsonDict] = result.get("result", [])  # pyright: ignore[reportAssignmentType]
+        return records

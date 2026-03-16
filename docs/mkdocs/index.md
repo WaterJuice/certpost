@@ -47,9 +47,9 @@ The setup wizard prompts for your Cloudflare API token, zone ID, and base domain
 
 ### Add a domain
 
-In the admin panel, enter a subdomain and IP address. certpost will:
+In the admin panel, enter a subdomain and a target (IP address or CNAME hostname). certpost will:
 
-1. Create an A record in Cloudflare
+1. Create an A or CNAME record in Cloudflare
 2. Issue a Let's Encrypt certificate via DNS-01
 3. Generate a per-domain API token
 
