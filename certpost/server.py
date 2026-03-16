@@ -378,10 +378,10 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response_body)))
-        # Persistent cookie (1 year) if remember, otherwise session cookie
+        # Persistent cookie (30 days) if remember, otherwise session cookie
         cookie = f"certpost_session={cookie_value}; Path=/; HttpOnly; SameSite=Strict"
         if remember:
-            cookie += "; Max-Age=31536000"
+            cookie += "; Max-Age=2592000"
         self.send_header("Set-Cookie", cookie)
         self.end_headers()
         self.wfile.write(response_body)
