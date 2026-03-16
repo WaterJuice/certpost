@@ -316,7 +316,10 @@
 <body>
     <header>
         <h1>certpost <span>certificate manager</span></h1>
-        <div id="header-domain" style="color: var(--accent); font-size: 15px; font-weight: 500;"></div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div id="header-domain" style="color: var(--accent); font-size: 15px; font-weight: 500;"></div>
+            <button id="logout-btn" class="btn btn-secondary btn-sm" onclick="doLogout()" style="display: none;">Logout</button>
+        </div>
     </header>
 
     <!-- Login Screen -->
@@ -417,8 +420,17 @@
         function showAdmin() {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('admin-screen').style.display = 'block';
+            document.getElementById('logout-btn').style.display = '';
             loadBaseDomain();
             loadDomains();
+        }
+
+        function doLogout() {
+            document.cookie = 'certpost_session=; Path=/; Max-Age=0';
+            document.getElementById('admin-screen').style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('login-screen').style.display = '';
+            document.getElementById('login-key').value = '';
         }
 
         function showTab(name) {
