@@ -570,7 +570,14 @@
         }
 
         function copyToken(token) {
-            navigator.clipboard.writeText(token);
+            const ta = document.createElement('textarea');
+            ta.value = token;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
         }
 
         async function editIp(subdomain) {
