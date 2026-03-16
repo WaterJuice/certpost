@@ -326,16 +326,18 @@
     <div id="login-screen">
         <div class="login-box">
             <h2>Admin Login</h2>
-            <div class="form-group">
-                <label>Admin Key</label>
-                <input type="password" id="login-key" placeholder="Enter admin key" onkeydown="if(event.key==='Enter')doLogin()">
-            </div>
-            <div class="remember-row">
-                <input type="checkbox" id="login-remember">
-                <label for="login-remember">Remember me</label>
-            </div>
-            <button class="btn btn-primary" onclick="doLogin()" style="width: 100%;">Login</button>
-            <div id="login-error" class="login-error">Invalid admin key</div>
+            <form onsubmit="event.preventDefault(); doLogin();" autocomplete="on">
+                <div class="form-group">
+                    <label for="login-key">Admin Key</label>
+                    <input type="password" id="login-key" name="password" autocomplete="current-password" placeholder="Enter admin key">
+                </div>
+                <div class="remember-row">
+                    <input type="checkbox" id="login-remember">
+                    <label for="login-remember">Remember me</label>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+                <div id="login-error" class="login-error">Invalid admin key</div>
+            </form>
         </div>
     </div>
 
