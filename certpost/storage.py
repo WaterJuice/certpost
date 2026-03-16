@@ -18,6 +18,7 @@
 # ----------------------------------------------------------------------------------------
 
 import datetime
+import hashlib
 import json
 import pathlib
 import secrets
@@ -131,22 +132,16 @@ class Storage:
         return key == config.get("admin_key", "")
 
     # ------------------------------------------------------------------------------------
-    def create_session(self) -> str:
-        """Create a new admin session token."""
-        token = "".join(secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH))
+    def admin_cookie_value(self) -> str:
+        """Return a SHA-256 hash of the admin key for use as a session cookie."""
         config = self.get_config()
-        sessions: list[str] = config.get("sessions", [])  # pyright: ignore[reportAssignmentType]
-        sessions.append(token)
-        config["sessions"] = sessions
-        self.save_config(config)
-        return token
+        admin_key: str = config.get("admin_key", "")  # pyright: ignore[reportAssignmentType]
+        return hashlib.sha256(admin_key.encode()).hexdigest()
 
     # ------------------------------------------------------------------------------------
-    def verify_session(self, token: str) -> bool:
-        """Verify an admin session token."""
-        config = self.get_config()
-        sessions: list[str] = config.get("sessions", [])  # pyright: ignore[reportAssignmentType]
-        return token in sessions
+    def verify_admin_cookie(self, value: str) -> bool:
+        """Verify an admin session cookie value."""
+        return value == self.admin_cookie_value()
 
     # ------------------------------------------------------------------------------------
     #   Domains

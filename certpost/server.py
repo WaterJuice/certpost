@@ -237,14 +237,14 @@ class _CertpostHandler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------------------------
     def _is_admin_authenticated(self) -> bool:
-        """Check if the request has a valid admin session cookie."""
+        """Check if the request has a valid admin cookie."""
         assert _storage is not None
         cookie_header = self.headers.get("Cookie", "")
         cookies = http.cookies.SimpleCookie(cookie_header)  # pyright: ignore[reportMissingTypeArgument]
         session = cookies.get("certpost_session")
         if session is None:
             return False
-        return _storage.verify_session(session.value)
+        return _storage.verify_admin_cookie(session.value)
 
     # ------------------------------------------------------------------------------------
     def _require_admin(self) -> bool:
@@ -372,14 +372,14 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             return
 
         remember = body.get("remember", False)
-        session_token = _storage.create_session()
+        cookie_value = _storage.admin_cookie_value()
 
         response_body = json.dumps({"status": "ok"}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response_body)))
         # Persistent cookie (1 year) if remember, otherwise session cookie
-        cookie = f"certpost_session={session_token}; Path=/; HttpOnly; SameSite=Strict"
+        cookie = f"certpost_session={cookie_value}; Path=/; HttpOnly; SameSite=Strict"
         if remember:
             cookie += "; Max-Age=31536000"
         self.send_header("Set-Cookie", cookie)

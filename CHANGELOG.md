@@ -1,4 +1,4 @@
-# certpost 1.0.0 Beta 2 - 15 Mar 2026
+# certpost 1.0.0 Beta 3 - 17 Mar 2026
 
 - Initial release
 - Let's Encrypt certificate issuance via ACME v2 with DNS-01 challenges

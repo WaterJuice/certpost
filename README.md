@@ -156,7 +156,7 @@ Walks you through creating either a fetch or proxy config. Auto-resolves domains
 
 ## Security
 
-- Admin panel is protected by an admin key with session cookies
+- Admin panel is protected by an admin key with cookie-based auth
 - Certificate API uses per-domain bearer tokens (not shared)
 - Private keys are stored in JSON files — protect the data directory with filesystem permissions
 - TLS proxy loads certs into memory and immediately deletes temp files

@@ -179,10 +179,6 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
         "port": port,
     }
 
-    # Preserve sessions if they exist
-    if "sessions" in existing:
-        config["sessions"] = existing["sessions"]
-
     tmp = config_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(config, indent=2) + "\n")
     tmp.rename(config_path)

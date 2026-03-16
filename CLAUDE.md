@@ -119,7 +119,7 @@ Two subcommands: `run` and `setup`. Both require `--data-dir` (no default locati
 
 Server features:
 - Uses stdlib `http.server` for HTTP serving (threaded)
-- Admin panel at `/` protected by admin key login with session cookies
+- Admin panel at `/` protected by admin key login with cookie auth
 - Per-domain API tokens (auto-generated when adding a domain, visible, rotatable)
 - Cert retrieval API at `/api/cert/<domain>` authenticated by per-domain bearer token
 - Creates Cloudflare A records when adding domains, removes them when deleting
@@ -157,11 +157,11 @@ Three subcommands: `fetch`, `proxy`, `init`. No command shows help.
 - `domains.json` — managed domains with status, IP, per-domain API tokens
 - `certs/<domain>/cert.json` — certificate PEM data with ISO timestamps
 - `acme_account.json` — ACME account key and registration URL
-- Admin sessions stored in config.json
+- Admin auth cookie is a SHA-256 hash of the admin key (no server-side session state)
 
 ### Auth
 
-- Admin panel: login with admin key, session cookie (optional "remember me" for persistence)
+- Admin panel: login with admin key, cookie set to SHA-256 hash of key (optional "remember me" for persistence)
 - Cert API: per-domain bearer tokens (generated on domain creation, rotatable)
 
 ## Testing Changes

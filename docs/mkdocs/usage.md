@@ -249,8 +249,8 @@ python -m certpost fetch -s http://certpost:8443 -t <token> -d app.example.com
 !!! note
     Private keys are stored in JSON files in the data directory. Protect this directory with appropriate filesystem permissions.
 
-- The admin panel is protected by an admin key login with session cookies
-- "Remember me" sets a persistent cookie; without it the session expires when the browser closes
+- The admin panel is protected by an admin key login with cookie-based auth
+- "Remember me" sets a persistent cookie; without it the cookie expires when the browser closes
 - Certificate retrieval uses per-domain bearer tokens (not a shared token)
 - The TLS proxy loads certificates into memory and immediately deletes temporary files
 - Tokens use lowercase alphanumeric characters only (40 characters)
