@@ -327,6 +327,7 @@
         <div class="login-box">
             <h2>Admin Login</h2>
             <form onsubmit="event.preventDefault(); doLogin();" autocomplete="on">
+                <input type="hidden" name="username" autocomplete="username" value="admin">
                 <div class="form-group">
                     <label for="login-key">Admin Key</label>
                     <input type="password" id="login-key" name="password" autocomplete="current-password" placeholder="Enter admin key">
