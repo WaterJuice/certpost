@@ -44,6 +44,7 @@ certpost/_version.py
 
 # Local data and generated configs
 /local
+/testdata
 certpost.json
 
 # Claude

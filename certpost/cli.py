@@ -53,7 +53,7 @@ def _create_parser() -> ArgsParser:
     """Build the argument parser with subcommands."""
     parser = ArgsParser(
         prog="certpost-server",
-        description="certpost server — issues and renews Let's Encrypt certificates via DNS-01 (Cloudflare), manages DNS records, and serves certificates via API.\n\nQuick start:\n  1. certpost-server setup -d <dir> — create config interactively\n  2. certpost-server run -d <dir> — start the server",
+        description="certpost server — issues and renews Let's Encrypt certificates via DNS-01, manages DNS records, and serves certificates via API. Supports Cloudflare and Technitium DNS providers.\n\nQuick start:\n  1. certpost-server setup -d <dir> — create config interactively\n  2. certpost-server run -d <dir> — start the server",
         version=f"certpost-server: {VERSION_STR}\npython: {sys.version.split()[0]}",
     )
 
@@ -127,6 +127,61 @@ def _prompt(label: str, default: str = "") -> str:
 
 
 # ----------------------------------------------------------------------------------------
+def _prompt_choice(label: str, options: list[str], default: str = "") -> str:
+    """Prompt for a choice from a list of options."""
+    options_str = "/".join(options)
+    if default:
+        result = input(f"  {label} ({options_str}) [{default}]: ").strip().lower()
+        return result if result in options else default
+    while True:
+        result = input(f"  {label} ({options_str}): ").strip().lower()
+        if result in options:
+            return result
+        print(f"    Please choose one of: {options_str}")
+
+
+# ----------------------------------------------------------------------------------------
+def _prompt_provider(label: str, existing: dict[str, object]) -> dict[str, object]:
+    """Prompt for DNS provider configuration."""
+    provider = _prompt_choice(
+        f"{label} provider",
+        ["cloudflare", "technitium"],
+        str(existing.get("provider", "cloudflare")),
+    )
+
+    if provider == "cloudflare":
+        api_token = _prompt(
+            "Cloudflare API token",
+            str(existing.get("api_token", "")),
+        )
+        zone_id = _prompt(
+            "Cloudflare Zone ID",
+            str(existing.get("zone_id", "")),
+        )
+        return {"provider": "cloudflare", "api_token": api_token, "zone_id": zone_id}
+
+    # technitium
+    server_url = _prompt(
+        "Technitium server URL (e.g. https://dns.example.com)",
+        str(existing.get("server_url", "")),
+    )
+    api_token = _prompt(
+        "Technitium API token",
+        str(existing.get("api_token", "")),
+    )
+    zone = _prompt(
+        "Technitium zone name (e.g. example.com)",
+        str(existing.get("zone", "")),
+    )
+    return {
+        "provider": "technitium",
+        "server_url": server_url,
+        "api_token": api_token,
+        "zone": zone,
+    }
+
+
+# ----------------------------------------------------------------------------------------
 def _run_setup(data_dir_path: pathlib.Path) -> None:
     """Run interactive setup wizard to create or update config.json."""
     data_dir_path.mkdir(parents=True, exist_ok=True)
@@ -135,7 +190,7 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     config_path = data_dir_path / "config.json"
 
     # Load existing config if present
-    existing: dict[str, str | int] = {}
+    existing: dict[str, object] = {}
     if config_path.exists():
         existing = json.loads(config_path.read_text())
         print(f"\nUpdating existing config at {config_path}")
@@ -144,21 +199,33 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
 
     print("Press Enter to skip any field — you can fill it in later.\n")
 
-    print("Cloudflare DNS settings:")
-    cf_token = _prompt(
-        "Cloudflare API token",
-        str(existing.get("cloudflare_api_token", "")),
-    )
-    cf_zone = _prompt(
-        "Cloudflare Zone ID",
-        str(existing.get("cloudflare_zone_id", "")),
-    )
-
-    print("\nDomain settings:")
+    print("Domain settings:")
     base_domain = _prompt(
         "Base domain (e.g. example.com)",
         str(existing.get("base_domain", "")),
     )
+
+    # DNS provider for ACME (TXT records for Let's Encrypt)
+    # Resolve existing defaults: dns_acme / dns_records override the shared dns key
+    existing_shared: dict[str, object] = existing.get("dns", {})  # pyright: ignore[reportAssignmentType]
+    existing_acme: dict[str, object] = existing.get("dns_acme", existing_shared)  # pyright: ignore[reportAssignmentType]
+    existing_records: dict[str, object] = existing.get("dns_records", existing_shared)  # pyright: ignore[reportAssignmentType]
+
+    print("\nDNS provider for ACME challenges (TXT records):")
+    dns_acme = _prompt_provider("ACME DNS", existing_acme)
+
+    # DNS provider for A/CNAME records — offer to reuse the ACME provider
+    is_same = existing_acme == existing_records
+    print("\nDNS provider for domain records (A/CNAME):")
+    use_same = _prompt_choice(
+        "Use the same provider as ACME?",
+        ["y", "n"],
+        "y" if is_same else "n",
+    )
+    if use_same == "y":
+        dns_records = dict(dns_acme)
+    else:
+        dns_records = _prompt_provider("Records DNS", existing_records)
 
     print("\nServer settings:")
     bind = _prompt("Bind address", str(existing.get("bind", "0.0.0.0")))
@@ -170,14 +237,18 @@ def _run_setup(data_dir_path: pathlib.Path) -> None:
     if not admin_key:
         admin_key = "".join(secrets.choice(_TOKEN_CHARS) for _ in range(40))
 
+    # Use a single "dns" key when both providers are identical, otherwise split
     config: dict[str, object] = {
-        "cloudflare_api_token": cf_token,
-        "cloudflare_zone_id": cf_zone,
         "base_domain": base_domain,
         "admin_key": admin_key,
         "bind": bind,
         "port": port,
     }
+    if dns_acme == dns_records:
+        config["dns"] = dns_acme
+    else:
+        config["dns_acme"] = dns_acme
+        config["dns_records"] = dns_records
 
     tmp = config_path.with_suffix(".tmp")
     tmp.write_text(json.dumps(config, indent=2) + "\n")

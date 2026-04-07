@@ -79,13 +79,16 @@ class Storage:
         config_path = self._data_dir / "config.json"
         if not config_path.exists():
             default_config: JsonDict = {
-                "cloudflare_api_token": "",
-                "cloudflare_zone_id": "",
                 "base_domain": "",
                 "admin_key": "".join(
                     secrets.choice(_TOKEN_CHARS) for _ in range(_TOKEN_LENGTH)
                 ),
                 "port": 8443,
+                "dns": {
+                    "provider": "cloudflare",
+                    "api_token": "",
+                    "zone_id": "",
+                },
             }
             self._write_json(config_path, default_config)
 
@@ -113,8 +116,26 @@ class Storage:
 
     # ------------------------------------------------------------------------------------
     def get_config(self) -> JsonDict:
-        """Read the configuration file."""
-        return self._read_json(self._data_dir / "config.json")
+        """Read the configuration file.
+
+        Automatically migrates legacy flat Cloudflare configs to the new
+        ``dns_acme`` / ``dns_records`` structure on first read.
+        """
+        config = self._read_json(self._data_dir / "config.json")
+        if "cloudflare_api_token" in config and "dns" not in config:
+            config = self._migrate_legacy_config(config)
+        return config
+
+    # ------------------------------------------------------------------------------------
+    def _migrate_legacy_config(self, config: JsonDict) -> JsonDict:
+        """Convert a legacy flat Cloudflare config to the new provider format."""
+        config["dns"] = {
+            "provider": "cloudflare",
+            "api_token": config.pop("cloudflare_api_token", ""),
+            "zone_id": config.pop("cloudflare_zone_id", ""),
+        }
+        self._write_json(self._data_dir / "config.json", config)
+        return config
 
     # ------------------------------------------------------------------------------------
     def save_config(self, config: JsonDict) -> None:

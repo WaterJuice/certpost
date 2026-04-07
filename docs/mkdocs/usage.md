@@ -14,10 +14,15 @@ certpost-server setup -d /var/lib/certpost
 
 The wizard prompts for:
 
-- **Cloudflare API token** — from your Cloudflare profile > API Tokens (use the "Edit zone DNS" template)
-- **Cloudflare Zone ID** — from your domain's overview page in Cloudflare
 - **Base domain** — e.g. `example.com`
-- **Port** — default `8443`
+- **ACME DNS provider** — the provider used for Let's Encrypt DNS-01 challenges (TXT records)
+- **Records DNS provider** — the provider used for A/CNAME records (can be the same or different)
+- **Server settings** — bind address and port
+
+For each DNS provider, you'll be asked to choose Cloudflare or Technitium and enter the relevant credentials:
+
+- **Cloudflare** — API token (from Cloudflare profile > API Tokens) and Zone ID (from domain overview page)
+- **Technitium** — server URL, API token, and zone name
 
 An admin key is generated automatically. All fields can be skipped and filled in later by editing `config.json`.
 
@@ -39,18 +44,50 @@ The `--data-dir` (`-d`) flag is required — there is no default location.
 
 ### Configuration
 
-The `config.json` in your data directory:
+The `config.json` in your data directory. Use a single `dns` key when one provider handles everything:
 
 ```json
 {
-  "cloudflare_api_token": "your-cloudflare-api-token",
-  "cloudflare_zone_id": "your-zone-id",
   "base_domain": "example.com",
   "admin_key": "auto-generated-login-key",
   "bind": "0.0.0.0",
-  "port": 8443
+  "port": 8443,
+  "dns": {
+    "provider": "cloudflare",
+    "api_token": "your-cloudflare-api-token",
+    "zone_id": "your-zone-id"
+  }
 }
 ```
+
+For split configurations (e.g. Cloudflare for ACME challenges, Technitium for domain records), use `dns_acme` and `dns_records` instead:
+
+```json
+{
+  "base_domain": "example.com",
+  "admin_key": "auto-generated-login-key",
+  "bind": "0.0.0.0",
+  "port": 8443,
+  "dns_acme": {
+    "provider": "cloudflare",
+    "api_token": "your-cloudflare-api-token",
+    "zone_id": "your-zone-id"
+  },
+  "dns_records": {
+    "provider": "technitium",
+    "server_url": "https://dns.example.com",
+    "api_token": "your-technitium-api-token",
+    "zone": "example.com"
+  }
+}
+```
+
+| Provider    | Required fields                            |
+|-------------|-------------------------------------------|
+| cloudflare  | `api_token`, `zone_id`                    |
+| technitium  | `server_url`, `api_token`, `zone`         |
+
+Legacy configs with flat `cloudflare_api_token` and `cloudflare_zone_id` keys are automatically migrated on first startup.
 
 ### Admin panel
 
@@ -58,7 +95,7 @@ Open `http://localhost:8443` and log in with your admin key (printed on server s
 
 **Domains** — add subdomains with a target (IP address or CNAME hostname). certpost will:
 
-- Create an A or CNAME record in Cloudflare
+- Create an A or CNAME record via the configured DNS provider
 - Issue a Let's Encrypt certificate via DNS-01 challenge
 - Generate a per-domain API token
 

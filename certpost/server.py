@@ -28,8 +28,8 @@ from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
 from typing import Any
 from .acme import AcmeClient
-from .cloudflare import CloudflareClient
 from .dns import DnsProvider
+from .dns import create_dns_provider
 from .log import log as _log
 from .renewal import RenewalThread
 from .storage import Storage
@@ -242,7 +242,7 @@ def _remove_dns_records(dns: DnsProvider, fqdn: str) -> None:
 
 _storage: Storage | None = None
 _acme_client: AcmeClient | None = None
-_dns_client: DnsProvider | None = None
+_dns_records: DnsProvider | None = None
 _renewal_thread: RenewalThread | None = None
 
 # ----------------------------------------------------------------------------------------
@@ -480,14 +480,14 @@ class _CertpostHandler(BaseHTTPRequestHandler):
 
         # Create DNS record and issue certificate in background thread
         acme = _acme_client
-        cf = _dns_client
+        records_dns = _dns_records
         storage = _storage
 
         def _setup() -> None:
             try:
                 # Create A or CNAME record
-                assert cf is not None
-                record_type = _set_dns_record(cf, fqdn, target)
+                assert records_dns is not None
+                record_type = _set_dns_record(records_dns, fqdn, target)
                 _log("server", f"{record_type} record created: {fqdn} -> {target}")
                 # Issue certificate
                 acme.issue_certificate(fqdn)
@@ -507,9 +507,9 @@ class _CertpostHandler(BaseHTTPRequestHandler):
         subdomain = urllib.parse.unquote(subdomain)
 
         # Remove DNS records (both A and CNAME)
-        if _dns_client is not None:
+        if _dns_records is not None:
             try:
-                _remove_dns_records(_dns_client, subdomain)
+                _remove_dns_records(_dns_records, subdomain)
             except Exception as e:
                 _log("server", f"Failed to remove DNS records for {subdomain}: {e}")
 
@@ -532,10 +532,10 @@ class _CertpostHandler(BaseHTTPRequestHandler):
             return
 
         # Remove old records and create new one
-        if _dns_client is not None:
+        if _dns_records is not None:
             try:
-                _remove_dns_records(_dns_client, subdomain)
-                record_type = _set_dns_record(_dns_client, subdomain, target)
+                _remove_dns_records(_dns_records, subdomain)
+                record_type = _set_dns_record(_dns_records, subdomain, target)
                 _log("server", f"{record_type} record updated: {subdomain} -> {target}")
             except Exception as e:
                 self._send_error(500, f"Failed to update DNS: {e}")
@@ -688,7 +688,7 @@ class _CertpostHandler(BaseHTTPRequestHandler):
 # ----------------------------------------------------------------------------------------
 def run_server(host: str, port: int, data_dir: str) -> None:
     """Start the certpost HTTP server."""
-    global _storage, _acme_client, _dns_client, _renewal_thread
+    global _storage, _acme_client, _dns_records, _renewal_thread
 
     _storage = Storage(data_dir)
 
@@ -697,15 +697,22 @@ def run_server(host: str, port: int, data_dir: str) -> None:
     admin_key = config.get("admin_key", "")
     print(f"  Admin key: {admin_key}", file=sys.stderr)
 
-    # Initialise DNS client (Cloudflare)
-    dns: DnsProvider = CloudflareClient(
-        api_token=str(config.get("cloudflare_api_token", "")),
-        zone_id=str(config.get("cloudflare_zone_id", "")),
-    )
-    _dns_client = dns
+    # Initialise DNS providers — a single "dns" key covers both roles;
+    # "dns_acme" and "dns_records" override individually when present.
+    dns_shared: dict[str, object] = config.get("dns", {})  # pyright: ignore[reportAssignmentType]
+    dns_acme_config: dict[str, object] = config.get("dns_acme", dns_shared)  # pyright: ignore[reportAssignmentType]
+    dns_records_config: dict[str, object] = config.get("dns_records", dns_shared)  # pyright: ignore[reportAssignmentType]
+
+    dns_acme = create_dns_provider(dns_acme_config)
+    _dns_records = create_dns_provider(dns_records_config)
+
+    acme_provider_name = dns_acme_config.get("provider", "?")
+    records_provider_name = dns_records_config.get("provider", "?")
+    print(f"  DNS (ACME): {acme_provider_name}", file=sys.stderr)
+    print(f"  DNS (records): {records_provider_name}", file=sys.stderr)
 
     # Initialise ACME client
-    _acme_client = AcmeClient(_storage, dns)
+    _acme_client = AcmeClient(_storage, dns_acme)
     try:
         _acme_client.initialise()
     except Exception:
