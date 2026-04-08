@@ -1,20 +1,11 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-dist/
-eggs/
-.eggs/
-*.egg-info/
-*.egg
+# Go
+/output
+/dist
+/bin
 
-# Virtual environments
+# Python (build tooling)
 .venv/
-venv/
-ENV/
+uv.lock
 
 # IDE
 .idea/
@@ -23,24 +14,8 @@ ENV/
 *.swo
 *~
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Type checking
-.pyright/
-.mypy_cache/
-
-# Linting
-.ruff_cache/
-
 # Build output
-/output
 /html
-
-# Generated
-certpost/_version.py
 
 # Local data and generated configs
 /local

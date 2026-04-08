@@ -1,6 +1,6 @@
 # certpost
 
-Let's Encrypt certificate manager with DNS-01 challenges, web admin panel, and TLS termination proxy. Supports Cloudflare and Technitium DNS Server.
+Let's Encrypt certificate manager with DNS-01 challenges, web admin panel, and TLS termination proxy. Written in Go — single static binary, no dependencies. Supports Cloudflare and Technitium DNS Server.
 
 ## Features
 
@@ -13,25 +13,27 @@ Let's Encrypt certificate manager with DNS-01 challenges, web admin panel, and T
 - **TLS termination proxy** — built-in proxy with SNI routing and automatic cert refresh
 - **Certificate fetching** — download `.crt` and `.key` files via CLI or admin panel
 - **Interactive setup** — `certpost-server setup` and `certpost init` wizards for easy configuration
-- **Zero dependencies** — stdlib only, shells out to system `openssl` for crypto
+- **Single static binary** — no runtime dependencies, no openssl required
 - **Modular DNS** — protocol-based design makes it easy to add new providers
 
 ## Requirements
 
-- Python 3.12+
-- System `openssl` binary (available on macOS and Linux)
+- Go 1.22+ (for building)
 - A supported DNS provider: Cloudflare (API token + zone ID) or Technitium DNS Server (server URL + API token)
 
-## Installation
+## Building
 
 ```bash
-pip install certpost
+make build
 ```
 
-Or install from source:
+Produces `output/certpost-server` and `output/certpost`.
+
+Cross-compile for Linux:
 
 ```bash
-uv pip install .
+make build-linux-amd64
+make build-linux-arm64
 ```
 
 ## Server
@@ -98,33 +100,9 @@ For split configurations, use `dns_acme` and `dns_records`:
 }
 ```
 
-### API
-
-Public endpoints (no auth):
-
-| Endpoint           | Description                              |
-|--------------------|------------------------------------------|
-| `GET /api/version` | Product name, API version, server version|
-| `GET /api/spec`    | OpenAPI 3.0 specification               |
-| `GET /api/help`    | Human-readable API documentation         |
-
-Certificate retrieval (per-domain bearer token):
-
-| Endpoint                | Description                         |
-|-------------------------|-------------------------------------|
-| `GET /api/cert/<domain>`| Certificate, chain, and private key |
-| `GET /api/token-info`   | Resolve token to domain             |
-
-Example:
-```bash
-curl -H "Authorization: Bearer <token>" http://certpost:8443/api/cert/app.example.com
-```
-
 ## Client
 
 ### Fetch certificates
-
-One-shot download:
 
 ```bash
 certpost fetch -s http://certpost:8443 -t <token> -d app.example.com -o /etc/ssl/certs
@@ -136,40 +114,10 @@ With automatic refresh every 24 hours:
 certpost fetch -s http://certpost:8443 -t <token> -d app.example.com --refresh 24
 ```
 
-Or use a config file:
-
-```bash
-certpost fetch -c fetch.json
-```
-
-Output files: `app.example.com.crt` (full chain) and `app.example.com.key` (private key, mode 0600).
-
 ### TLS termination proxy
-
-Run a proxy that terminates TLS, routes by SNI, and auto-refreshes certs:
 
 ```bash
 certpost proxy -c proxy.json
-```
-
-Proxy config:
-
-```json
-{
-  "server": "http://certpost:8443",
-  "listen": "0.0.0.0:443",
-  "refresh_hours": 24,
-  "routes": {
-    "app.example.com": {
-      "token": "per-domain-api-token",
-      "backend": "127.0.0.1:8080"
-    },
-    "api.example.com": {
-      "token": "another-api-token",
-      "backend": "127.0.0.1:9090"
-    }
-  }
-}
 ```
 
 ### Generate a config interactively
@@ -178,14 +126,12 @@ Proxy config:
 certpost init
 ```
 
-Walks you through creating either a fetch or proxy config. Auto-resolves domains from tokens and validates against the server.
-
 ## Security
 
 - Admin panel is protected by an admin key with cookie-based auth
 - Certificate API uses per-domain bearer tokens (not shared)
 - Private keys are stored in JSON files — protect the data directory with filesystem permissions
-- TLS proxy loads certs into memory and immediately deletes temp files
+- TLS proxy loads certs directly into memory via `tls.X509KeyPair` — no temp files
 
 ## Licence
 

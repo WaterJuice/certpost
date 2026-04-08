@@ -1,85 +1,16 @@
-[tool.hatch.build]
-# Include _version.py in builds even though it's gitignored (generated at build time)
-artifacts = ["certpost/_version.py"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["certpost"]
-
 [project]
 name = "certpost"
 requires-python = ">=3.12"
-dynamic = ["version"]
-license = "Unlicense"
-authors = [
-    { name = "WaterJuice" },
-]
-description = "Let's Encrypt certificate manager with DNS-01 via Cloudflare and API access"
-readme = "README.md"
-keywords = ["certificates", "letsencrypt", "acme", "ssl", "tls", "cloudflare", "dns"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
-    "Environment :: Web Environment",
-    "Intended Audience :: Developers",
-    "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: The Unlicense (Unlicense)",
-    "Operating System :: MacOS",
-    "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Internet :: WWW/HTTP",
-    "Topic :: Security",
-    "Typing :: Typed",
-]
-dependencies = []
-
-[project.urls]
-Source = "https://github.com/WaterJuice/certpost"
-
-[project.scripts]
-certpost = "certpost.client_cli:main"
-certpost-server = "certpost.cli:main"
-
-[build-system]
-requires = ["hatchling", "uv-dynamic-versioning"]
-build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "uv-dynamic-versioning"
-
-[tool.uv-dynamic-versioning]
-vcs = "git"
-pattern = "default-unprefixed"
-
-[tool.uv]
-
-[tool.ruff]
-target-version = "py312"
-
-[tool.ruff.lint]
-extend-select = ["F", "E", "W", "I", "Q", "B", "TC", "UP"]
-ignore = ["E501", "B009", "B010", "UP007", "UP036", "TC001", "TC003"]
-
-[tool.ruff.lint.isort]
-no-lines-before = ["future","standard-library","third-party","first-party","local-folder"]
-force-single-line = true
-
-[tool.pyright]
-typeCheckingMode = "strict"
-reportUnusedImport = "error"
-pythonVersion = "3.12"
-exclude = [".venv"]
+version = "0.0.0"
 
 [tool.cal-publish-python]
 profile = "waterjuice"
 
+[tool.uv]
+
 [dependency-groups]
 dev = [
-    "ruff",
-    "black",
-    "pyright[nodejs]",
-    "cal-mkdocs ; python_version >= '3.12'",
-    "cal-publish-python>=0.4.0 ; python_version >= '3.12'",
+    "bin2whl>=1.0.0b4",
+    "cal-mkdocs",
+    "cal-publish-python>=1.1.0b1",
 ]
