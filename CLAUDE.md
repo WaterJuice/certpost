@@ -124,7 +124,7 @@ Server features:
 - Per-domain API tokens (auto-generated when adding a domain, visible, rotatable)
 - Cert retrieval API at `/api/cert/<domain>` authenticated by per-domain bearer token
 - Creates A or CNAME records via the configured DNS provider when adding domains, removes them when deleting
-- Background renewal thread checks daily, renews certs within 30 days of expiry
+- Background renewal thread checks daily, proactively renews the 2 oldest certs per cycle to keep them fresh, with a 30-day expiry safety net
 - In-memory log buffer viewable in admin panel Logs tab
 - Info endpoints: `/api/version`, `/api/spec` (OpenAPI 3.0), `/api/help` (plain text)
 - `/api/token-info` — resolves a bearer token to its domain

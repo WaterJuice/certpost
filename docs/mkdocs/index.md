@@ -15,7 +15,7 @@ Managing SSL certificates across multiple services is tedious — requesting cer
 - **DNS management** — creates and manages A/CNAME records alongside certificates
 - **Multiple DNS providers** — Cloudflare and Technitium DNS Server, with split provider support (e.g. Cloudflare for ACME, Technitium for records)
 - **Web admin panel** — manage domains, view status/logs, download certs (protected by admin key)
-- **Background renewal** — checks daily, renews within 30 days of expiry
+- **Background renewal** — checks daily, proactively renews the 2 oldest certs per day to keep them fresh
 - **Per-domain tokens** — each domain gets its own API token (auto-generated, rotatable)
 - **TLS termination proxy** — built-in proxy with SNI routing and automatic cert refresh
 - **Certificate fetch** — save `.crt` and `.key` files, with optional scheduled refresh
@@ -73,6 +73,6 @@ See the [Usage](usage.md) page for full details.
 
 ## How It Works
 
-certpost-server runs an HTTP server with a web admin panel and certificate retrieval API. When you add a subdomain, a background thread creates an A or CNAME record via the configured DNS provider, then handles the ACME v2 flow: generates keys and a CSR using system `openssl`, sets a `_acme-challenge` TXT record via the ACME DNS provider, validates with Let's Encrypt, and stores the certificate. A renewal thread checks daily and re-issues certificates approaching expiry.
+certpost-server runs an HTTP server with a web admin panel and certificate retrieval API. When you add a subdomain, a background thread creates an A or CNAME record via the configured DNS provider, then handles the ACME v2 flow: generates keys and a CSR using system `openssl`, sets a `_acme-challenge` TXT record via the ACME DNS provider, validates with Let's Encrypt, and stores the certificate. A renewal thread checks daily, proactively renewing the oldest certificates (2 per day) to keep them fresh, with a safety net that forces renewal for any cert within 30 days of expiry.
 
 The client (`certpost proxy`) fetches certificates from the server using per-domain bearer tokens, loads them into an SSL context (temp files are deleted immediately after loading), and terminates TLS using SNI to pick the right certificate for each incoming connection. Plaintext traffic is forwarded to the configured backend. Certificates are refreshed automatically on a configurable interval (default 24 hours).

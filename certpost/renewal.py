@@ -28,7 +28,8 @@ from .storage import Storage
 # ----------------------------------------------------------------------------------------
 
 _CHECK_INTERVAL = 86400  # 24 hours
-_RENEWAL_WINDOW = 30 * 86400  # 30 days before expiry
+_RENEWAL_WINDOW = 30 * 86400  # 30 days before expiry (forced renewal)
+_DAILY_RENEWAL_LIMIT = 2  # max certs to proactively renew per cycle
 
 # ----------------------------------------------------------------------------------------
 #   Renewal Thread
@@ -92,9 +93,18 @@ class RenewalThread:
 
     # ------------------------------------------------------------------------------------
     def _check_renewals(self) -> None:
-        """Check all domains and renew certificates that are near expiry."""
+        """Check all domains and renew certificates.
+
+        First issues certs for any pending domains and force-renews anything
+        within the 30-day expiry window (safety net).  Then proactively renews
+        up to ``_DAILY_RENEWAL_LIMIT`` of the oldest issued certificates to
+        keep them fresh.
+        """
         domains = self._storage.get_domains()
         now = datetime.datetime.now(datetime.UTC)
+
+        # Candidates for proactive renewal — issued certs sorted oldest first
+        proactive_candidates: list[tuple[float, str]] = []
 
         for domain in domains:
             subdomain = domain.get("subdomain", "")
@@ -109,7 +119,7 @@ class RenewalThread:
                 self._issue_cert(subdomain)
                 continue
 
-            # Renew certs within the renewal window
+            # Force-renew certs within the expiry window (safety net)
             if status == "issued" and expires_at_str is not None:
                 expires_at = datetime.datetime.fromisoformat(str(expires_at_str))
                 time_remaining = (expires_at - now).total_seconds()
@@ -120,6 +130,23 @@ class RenewalThread:
                         f"Certificate for {subdomain} expires in {days_left:.0f} days, renewing...",
                     )
                     self._issue_cert(subdomain)
+                else:
+                    # Track for proactive renewal — sort by earliest expiry
+                    proactive_candidates.append((time_remaining, subdomain))
+
+        # Proactively renew the oldest certs (earliest expiry first)
+        proactive_candidates.sort()
+        renewed = 0
+        for _remaining, subdomain in proactive_candidates:
+            if renewed >= _DAILY_RENEWAL_LIMIT:
+                break
+            days_until = _remaining / 86400
+            _log(
+                "renewal",
+                f"Proactive renewal for {subdomain} (expires in {days_until:.0f} days)",
+            )
+            self._issue_cert(subdomain)
+            renewed += 1
 
     # ------------------------------------------------------------------------------------
     def _issue_cert(self, subdomain: str) -> None:

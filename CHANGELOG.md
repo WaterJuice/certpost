@@ -1,4 +1,4 @@
-# certpost 1.0.0 Beta 7 - 7 Apr 2026
+# certpost 1.0.0 Beta 7 - 8 Apr 2026
 
 - Initial release
 - Let's Encrypt certificate issuance via ACME v2 with DNS-01 challenges
@@ -8,7 +8,7 @@
 - Automatic migration of legacy flat Cloudflare configs to the new provider format
 - Web admin panel with login, domain management, token management, and logs
 - Per-domain API tokens (auto-generated, visible, rotatable)
-- Background certificate renewal (30-day window, daily checks)
+- Background certificate renewal — proactively renews the 2 oldest certs daily, with a 30-day expiry safety net
 - TLS termination proxy with SNI routing and automatic cert refresh
 - Certificate fetch CLI with optional scheduled refresh
 - Interactive setup wizards for server (`certpost-server setup`) and client (`certpost init`)
