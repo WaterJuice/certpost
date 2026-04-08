@@ -40,6 +40,7 @@
 
         header h1 { font-size: 20px; font-weight: 600; }
         header h1 span { color: var(--text-muted); font-weight: 400; }
+        #header-version { font-size: 12px; }
 
         .container { max-width: 720px; margin: 0 auto; padding: 24px; }
 
@@ -307,6 +308,22 @@
         .inline-edit button { vertical-align: middle; }
 
         /* Responsive */
+        .beta-ribbon {
+            position: fixed;
+            top: 18px;
+            left: -34px;
+            z-index: 200;
+            background: #f59e0b;
+            color: var(--bg);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 4px 40px;
+            transform: rotate(-45deg);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        }
+
         @media (max-width: 600px) {
             .domain-meta { grid-template-columns: 1fr; }
             .container { padding: 16px; }
@@ -314,8 +331,9 @@
     </style>
 </head>
 <body>
+    <div class="beta-ribbon">Beta</div>
     <header>
-        <h1>certpost <span>certificate manager</span></h1>
+        <h1>certpost <span>certificate manager</span> <span id="header-version"></span></h1>
         <div style="display: flex; align-items: center; gap: 16px;">
             <div id="header-domain" style="color: var(--accent); font-size: 15px; font-weight: 500;"></div>
             <button id="logout-btn" class="btn btn-secondary btn-sm" onclick="doLogout()" style="display: none;">Logout</button>
@@ -460,6 +478,21 @@
             const d = typeof ts === 'string' ? new Date(ts) : new Date(ts * 1000);
             return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' });
         }
+
+        // Beta ribbon — hide for stable releases
+        async function checkBetaRibbon() {
+            try {
+                const resp = await fetch('/api/version');
+                const data = await resp.json();
+                const ver = data.server_version || '';
+                if (ver) document.getElementById('header-version').textContent = ver;
+                if (ver && !/[a-zA-Z]/.test(ver)) {
+                    const ribbon = document.querySelector('.beta-ribbon');
+                    if (ribbon) ribbon.style.display = 'none';
+                }
+            } catch { /* ignore */ }
+        }
+        checkBetaRibbon();
 
         // Base domain
         async function loadBaseDomain() {
