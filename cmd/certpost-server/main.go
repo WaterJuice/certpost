@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/WaterJuice/certpost/internal/colour"
 	"github.com/WaterJuice/certpost/internal/server"
 	"github.com/WaterJuice/certpost/internal/storage"
 	"github.com/WaterJuice/certpost/internal/version"
@@ -43,7 +43,7 @@ func run() int {
 			fmt.Println(version.LicenceText)
 			return 0
 		case "--version", "-v":
-			fmt.Printf("certpost-server: %s\ngo: %s\n", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
+			fmt.Printf("certpost-server %s\n", version.Version)
 			return 0
 		}
 	}
@@ -69,35 +69,80 @@ func run() int {
 }
 
 func printHelp() {
-	fmt.Fprintf(os.Stderr, `certpost-server — issues and renews Let's Encrypt certificates via DNS-01,
+	c := colour.Prog
+	h := colour.Heading
+	o := colour.LongOpt
+	l := colour.Label
+	s := colour.ShortOpt
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%scertpost-server%s — issues and renews Let's Encrypt certificates via DNS-01,
 manages DNS records, and serves certificates via API. Supports Cloudflare
 and Technitium DNS providers.
 
-Quick start:
-  1. certpost-server setup -d <dir> — create config interactively
-  2. certpost-server run -d <dir> — start the server
+%squick start:%s
+  1. %scertpost-server setup%s %s--data-dir%s %sDIR%s — create config interactively
+  2. %scertpost-server run%s %s--data-dir%s %sDIR%s — start the server
 
-Commands:
-  run     Start the certpost server
-  setup   Interactive setup wizard for config.json
+%scommands:%s
+  %srun%s     Start the certpost server
+  %ssetup%s   Interactive setup wizard for config.json
 
-Flags:
-  --version   Show version and exit
-  --license   Show licence information and exit
-  --help      Show this help
-`)
+%sflags:%s
+  %s--version%s   Show version and exit
+  %s--license%s   Show licence information and exit
+  %s--help%s      Show this help
+`,
+		c, r,
+		h, r,
+		c, r, o, r, l, r,
+		c, r, o, r, l, r,
+		h, r,
+		s, r,
+		s, r,
+		h, r,
+		o, r,
+		o, r,
+		o, r,
+	)
+}
+
+func runHelp() {
+	h := colour.Heading
+	o := colour.LongOpt
+	s := colour.ShortOpt
+	l := colour.Label
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%susage:%s certpost-server run [%s--port%s %sPORT%s] [%s--host%s %sHOST%s] %s--data-dir%s %sDIR%s
+
+Start the certpost server
+
+%soptions:%s
+  %s--port%s, %s-p%s %sPORT%s       Port to listen on (default: 8443)
+  %s--host%s, %s-H%s %sHOST%s       Host to bind to (default: 0.0.0.0)
+  %s--data-dir%s, %s-d%s %sDIR%s   Data directory containing config.json
+`,
+		h, r, o, r, l, r, o, r, l, r, o, r, l, r,
+		h, r,
+		o, r, s, r, l, r,
+		o, r, s, r, l, r,
+		o, r, s, r, l, r,
+	)
 }
 
 func runCmd() int {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	dataDir := fs.String("d", "", "Data directory containing config.json (required)")
-	fs.StringVar(dataDir, "data-dir", "", "Data directory containing config.json (required)")
-	port := fs.Int("p", 8443, "Port to listen on")
-	fs.IntVar(port, "port", 8443, "Port to listen on")
-	host := fs.String("H", "0.0.0.0", "Host to bind to")
-	fs.StringVar(host, "host", "0.0.0.0", "Host to bind to")
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	fs.Usage = runHelp
+	dataDir := fs.String("d", "", "")
+	fs.StringVar(dataDir, "data-dir", "", "")
+	port := fs.Int("p", 8443, "")
+	fs.IntVar(port, "port", 8443, "")
+	host := fs.String("H", "0.0.0.0", "")
+	fs.StringVar(host, "host", "0.0.0.0", "")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 1
 	}
 
@@ -140,12 +185,35 @@ func runCmd() int {
 	return 0
 }
 
+func setupHelp() {
+	h := colour.Heading
+	o := colour.LongOpt
+	s := colour.ShortOpt
+	l := colour.Label
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%susage:%s certpost-server setup %s--data-dir%s %sDIR%s
+
+Interactive setup wizard for config.json
+
+%soptions:%s
+  %s--data-dir%s, %s-d%s %sDIR%s   Data directory to create config in
+`,
+		h, r, o, r, l, r,
+		h, r,
+		o, r, s, r, l, r,
+	)
+}
+
 func setupCmd() int {
-	fs := flag.NewFlagSet("setup", flag.ExitOnError)
-	dataDir := fs.String("d", "", "Data directory to create config in (required)")
-	fs.StringVar(dataDir, "data-dir", "", "Data directory to create config in (required)")
+	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
+	fs.Usage = setupHelp
+	dataDir := fs.String("d", "", "")
+	fs.StringVar(dataDir, "data-dir", "", "")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 1
 	}
 

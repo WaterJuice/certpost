@@ -25,12 +25,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/WaterJuice/certpost/internal/client"
+	"github.com/WaterJuice/certpost/internal/colour"
 	"github.com/WaterJuice/certpost/internal/proxy"
 	"github.com/WaterJuice/certpost/internal/version"
 )
@@ -46,7 +46,7 @@ func run() int {
 			fmt.Println(version.LicenceText)
 			return 0
 		case "--version", "-v":
-			fmt.Printf("certpost: %s\ngo: %s\n", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
+			fmt.Printf("certpost %s\n", version.Version)
 			return 0
 		}
 	}
@@ -74,42 +74,94 @@ func run() int {
 }
 
 func printHelp() {
-	fmt.Fprintf(os.Stderr, `certpost — works with a certpost-server to manage Let's Encrypt certificates.
+	c := colour.Prog
+	h := colour.Heading
+	o := colour.LongOpt
+	s := colour.ShortOpt
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%scertpost%s — works with a certpost-server to manage Let's Encrypt certificates.
 
-Quick start:
-  1. certpost init — create a config interactively
-  2. certpost fetch -c config.json — download .crt and .key files
-  3. certpost proxy -c config.json — run a TLS termination proxy
+%squick start:%s
+  1. %scertpost init%s — create a config interactively
+  2. %scertpost fetch%s %s--config%s config.json — download .crt and .key files
+  3. %scertpost proxy%s %s--config%s config.json — run a TLS termination proxy
 
-Commands:
-  fetch   Fetch certificates and save as .crt/.key files
-  proxy   TLS termination proxy with auto-refreshing certs
-  init    Generate a config file interactively
+%scommands:%s
+  %sfetch%s    Fetch certificates and save as .crt/.key files
+  %sproxy%s    TLS termination proxy with auto-refreshing certs
+  %sinit%s     Generate a config file interactively
 
-Flags:
-  --version   Show version and exit
-  --license   Show licence information and exit
-  --help      Show this help
-`)
+%sflags:%s
+  %s--version%s   Show version and exit
+  %s--license%s   Show licence information and exit
+  %s--help%s      Show this help
+`,
+		c, r,
+		h, r,
+		c, r,
+		c, r, o, r,
+		c, r, o, r,
+		h, r,
+		s, r,
+		s, r,
+		s, r,
+		h, r,
+		o, r,
+		o, r,
+		o, r,
+	)
 }
 
 // --- Fetch ---
 
+func fetchHelp() {
+	h := colour.Heading
+	o := colour.LongOpt
+	s := colour.ShortOpt
+	l := colour.Label
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%susage:%s certpost fetch [%s--config%s %sFILE%s] [%s--server%s %sURL%s %s--token%s %sTOKEN%s %s--domain%s %sDOMAIN%s]
+
+Fetch certificates and save as .crt/.key files
+
+%soptions:%s
+  %s--config%s, %s-c%s %sFILE%s        JSON config file
+  %s--server%s, %s-s%s %sURL%s         certpost server URL
+  %s--token%s, %s-t%s %sTOKEN%s        API token for the domain
+  %s--domain%s, %s-d%s %sDOMAIN%s      Domain to fetch certificate for
+  %s--output-dir%s, %s-o%s %sDIR%s     Directory to save certificate files (default: .)
+  %s--refresh%s %sHOURS%s          Re-fetch interval in hours (default: 0)
+`,
+		h, r, o, r, l, r, o, r, l, r, o, r, l, r, o, r, l, r,
+		h, r,
+		o, r, s, r, l, r,
+		o, r, s, r, l, r,
+		o, r, s, r, l, r,
+		o, r, s, r, l, r,
+		o, r, s, r, l, r,
+		o, r, l, r,
+	)
+}
+
 func fetchCmd() int {
-	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
-	serverURL := fs.String("s", "", "certpost server URL")
-	fs.StringVar(serverURL, "server", "", "certpost server URL")
-	token := fs.String("t", "", "API token for the domain")
-	fs.StringVar(token, "token", "", "API token for the domain")
-	domain := fs.String("d", "", "Domain to fetch certificate for")
-	fs.StringVar(domain, "domain", "", "Domain to fetch certificate for")
-	outputDir := fs.String("o", ".", "Directory to save certificate files")
-	fs.StringVar(outputDir, "output-dir", ".", "Directory to save certificate files")
-	refresh := fs.Int("refresh", 0, "Re-fetch interval in hours (0 = once)")
-	configFile := fs.String("c", "", "JSON config file")
-	fs.StringVar(configFile, "config", "", "JSON config file")
+	fs := flag.NewFlagSet("fetch", flag.ContinueOnError)
+	fs.Usage = fetchHelp
+	serverURL := fs.String("s", "", "")
+	fs.StringVar(serverURL, "server", "", "")
+	token := fs.String("t", "", "")
+	fs.StringVar(token, "token", "", "")
+	domain := fs.String("d", "", "")
+	fs.StringVar(domain, "domain", "", "")
+	outputDir := fs.String("o", ".", "")
+	fs.StringVar(outputDir, "output-dir", ".", "")
+	refresh := fs.Int("refresh", 0, "")
+	configFile := fs.String("c", "", "")
+	fs.StringVar(configFile, "config", "", "")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 1
 	}
 
@@ -173,13 +225,38 @@ func fetchCmd() int {
 
 // --- Proxy ---
 
+func proxyHelp() {
+	h := colour.Heading
+	o := colour.LongOpt
+	s := colour.ShortOpt
+	l := colour.Label
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%susage:%s certpost proxy [%s--listen%s %sADDR%s] %s--config%s %sFILE%s
+
+TLS termination proxy with SNI routing and auto-refreshing certs
+
+%soptions:%s
+  %s--listen%s %sADDR%s             Listen address (default: 0.0.0.0:443)
+  %s--config%s, %s-c%s %sFILE%s        JSON config file
+`,
+		h, r, o, r, l, r, o, r, l, r,
+		h, r,
+		o, r, l, r,
+		o, r, s, r, l, r,
+	)
+}
+
 func proxyCmd() int {
-	fs := flag.NewFlagSet("proxy", flag.ExitOnError)
-	configFile := fs.String("c", "", "JSON config file (required)")
-	fs.StringVar(configFile, "config", "", "JSON config file (required)")
-	listen := fs.String("listen", "0.0.0.0:443", "Listen address")
+	fs := flag.NewFlagSet("proxy", flag.ContinueOnError)
+	fs.Usage = proxyHelp
+	configFile := fs.String("c", "", "")
+	fs.StringVar(configFile, "config", "", "")
+	listen := fs.String("listen", "0.0.0.0:443", "")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 1
 	}
 
@@ -233,12 +310,35 @@ func prompt(label, defaultVal string) string {
 	return result
 }
 
+func initHelp() {
+	h := colour.Heading
+	o := colour.LongOpt
+	s := colour.ShortOpt
+	l := colour.Label
+	r := colour.Reset
+	fmt.Fprintf(os.Stderr, `%susage:%s certpost init [%s--output%s %sFILE%s]
+
+Generate a fetch or proxy config file interactively
+
+%soptions:%s
+  %s--output%s, %s-o%s %sFILE%s   Output config file path (default: certpost.json)
+`,
+		h, r, o, r, l, r,
+		h, r,
+		o, r, s, r, l, r,
+	)
+}
+
 func initCmd() int {
-	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	output := fs.String("o", "certpost.json", "Output config file path")
-	fs.StringVar(output, "output", "certpost.json", "Output config file path")
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.Usage = initHelp
+	output := fs.String("o", "certpost.json", "")
+	fs.StringVar(output, "output", "certpost.json", "")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 1
 	}
 
