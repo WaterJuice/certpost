@@ -256,7 +256,7 @@ The proxy:
 4. Forwards decrypted traffic to the backend
 5. Refreshes certificates in the background
 
-Certificate data is loaded into OpenSSL's memory. Temporary files used during loading are deleted immediately.
+Certificate data is loaded directly into memory via `tls.X509KeyPair` — no temporary files.
 
 ### certpost init
 
@@ -275,12 +275,6 @@ The wizard:
 - Auto-resolves domains from API tokens (via `/api/token-info`)
 - Validates the configuration against the server before saving
 
-## Running as a module
-
-```bash
-python -m certpost fetch -s http://certpost:8443 -t <token> -d app.example.com
-```
-
 ## Security
 
 !!! note
@@ -289,5 +283,5 @@ python -m certpost fetch -s http://certpost:8443 -t <token> -d app.example.com
 - The admin panel is protected by an admin key login with cookie-based auth
 - "Remember me" sets a persistent cookie; without it the cookie expires when the browser closes
 - Certificate retrieval uses per-domain bearer tokens (not a shared token)
-- The TLS proxy loads certificates into memory and immediately deletes temporary files
+- The TLS proxy loads certificates directly into memory via `tls.X509KeyPair` — no temp files
 - Tokens use lowercase alphanumeric characters only (40 characters)
