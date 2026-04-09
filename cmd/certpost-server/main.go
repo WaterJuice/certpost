@@ -75,7 +75,7 @@ func printHelp() {
 	l := colour.Label
 	s := colour.ShortOpt
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%scertpost-server%s — issues and renews Let's Encrypt certificates via DNS-01,
+	fmt.Fprintf(os.Stdout, `%scertpost-server%s — issues and renews Let's Encrypt certificates via DNS-01,
 manages DNS records, and serves certificates via API. Supports Cloudflare
 and Technitium DNS providers.
 
@@ -112,7 +112,7 @@ func runHelp() {
 	s := colour.ShortOpt
 	l := colour.Label
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%susage:%s certpost-server run [%s--port%s %sPORT%s] [%s--host%s %sHOST%s] %s--data-dir%s %sDIR%s
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost-server run [%s--port%s %sPORT%s] [%s--host%s %sHOST%s] %s--data-dir%s %sDIR%s
 
 Start the certpost server
 
@@ -191,7 +191,7 @@ func setupHelp() {
 	s := colour.ShortOpt
 	l := colour.Label
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%susage:%s certpost-server setup %s--data-dir%s %sDIR%s
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost-server setup %s--data-dir%s %sDIR%s
 
 Interactive setup wizard for config.json
 
