@@ -379,6 +379,32 @@ func (s *Storage) SaveAcmeAccount(data map[string]any) error {
 	return s.writeJSON(filepath.Join(s.dataDir, "acme_account.json"), data)
 }
 
+// --- Renewal State ---
+
+// GetLastProactiveRenewal returns the timestamp of the last proactive renewal cycle.
+func (s *Storage) GetLastProactiveRenewal() (time.Time, error) {
+	path := filepath.Join(s.dataDir, "renewal_state.json")
+	data, err := s.readJSON(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, err
+	}
+	ts, _ := data["last_proactive_renewal"].(string)
+	if ts == "" {
+		return time.Time{}, nil
+	}
+	return time.Parse(time.RFC3339, ts)
+}
+
+// SaveLastProactiveRenewal records the current time as the last proactive renewal.
+func (s *Storage) SaveLastProactiveRenewal() error {
+	return s.writeJSON(filepath.Join(s.dataDir, "renewal_state.json"), map[string]any{
+		"last_proactive_renewal": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
 // --- Helpers ---
 
 // GenerateToken creates a cryptographically random token string.
