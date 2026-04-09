@@ -48,7 +48,7 @@ func shouldColourise() bool {
 	if os.Getenv("TERM") == "dumb" {
 		return false
 	}
-	fi, err := os.Stderr.Stat()
+	fi, err := os.Stdout.Stat()
 	if err != nil {
 		return false
 	}

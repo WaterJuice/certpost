@@ -79,7 +79,7 @@ func printHelp() {
 	o := colour.LongOpt
 	s := colour.ShortOpt
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%scertpost%s — works with a certpost-server to manage Let's Encrypt certificates.
+	fmt.Fprintf(os.Stdout, `%scertpost%s — works with a certpost-server to manage Let's Encrypt certificates.
 
 %squick start:%s
   1. %scertpost init%s — create a config interactively
@@ -120,7 +120,7 @@ func fetchHelp() {
 	s := colour.ShortOpt
 	l := colour.Label
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%susage:%s certpost fetch [%s--config%s %sFILE%s] [%s--server%s %sURL%s %s--token%s %sTOKEN%s %s--domain%s %sDOMAIN%s]
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost fetch [%s--config%s %sFILE%s] [%s--server%s %sURL%s %s--token%s %sTOKEN%s %s--domain%s %sDOMAIN%s]
 
 Fetch certificates and save as .crt/.key files
 
@@ -231,7 +231,7 @@ func proxyHelp() {
 	s := colour.ShortOpt
 	l := colour.Label
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%susage:%s certpost proxy [%s--listen%s %sADDR%s] %s--config%s %sFILE%s
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost proxy [%s--listen%s %sADDR%s] %s--config%s %sFILE%s
 
 TLS termination proxy with SNI routing and auto-refreshing certs
 
@@ -316,7 +316,7 @@ func initHelp() {
 	s := colour.ShortOpt
 	l := colour.Label
 	r := colour.Reset
-	fmt.Fprintf(os.Stderr, `%susage:%s certpost init [%s--output%s %sFILE%s]
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost init [%s--output%s %sFILE%s]
 
 Generate a fetch or proxy config file interactively
 
