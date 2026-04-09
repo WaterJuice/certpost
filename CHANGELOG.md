@@ -1,4 +1,4 @@
-# certpost 1.0.0 Beta 9 - 9 Apr 2026
+# certpost 1.0.0 Beta 10 - 9 Apr 2026
 
 - Coloured CLI help matching Python 3.14 argparse theme (auto-disabled in pipes, respects NO_COLOR)
 - Help output written to stdout for proper pipe behaviour
