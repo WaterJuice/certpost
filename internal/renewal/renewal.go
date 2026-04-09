@@ -87,8 +87,8 @@ func checkRenewals(s *storage.Storage, acmeClient *acme.Client) {
 			continue
 		}
 
-		// Issue certs for pending domains
-		if status == "pending" {
+		// Issue certs for pending or errored domains
+		if status == "pending" || status == "error" {
 			issueCert(s, acmeClient, subdomain)
 			continue
 		}
