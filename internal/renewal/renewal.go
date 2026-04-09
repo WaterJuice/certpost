@@ -114,7 +114,17 @@ func checkRenewals(s *storage.Storage, acmeClient *acme.Client) {
 		}
 	}
 
-	// Proactively renew the oldest certs (earliest expiry first)
+	// Proactively renew the oldest certs (earliest expiry first),
+	// but only if 24 hours have passed since the last proactive cycle.
+	lastProactive, _ := s.GetLastProactiveRenewal()
+	if time.Since(lastProactive) < checkInterval {
+		if len(proactiveCandidates) > 0 {
+			logbuf.Log("renewal", fmt.Sprintf(
+				"Skipping proactive renewal — last run was %s", lastProactive.Format(time.RFC3339)))
+		}
+		return
+	}
+
 	sort.Slice(proactiveCandidates, func(i, j int) bool {
 		return proactiveCandidates[i].timeRemaining < proactiveCandidates[j].timeRemaining
 	})
@@ -129,6 +139,10 @@ func checkRenewals(s *storage.Storage, acmeClient *acme.Client) {
 			"Proactive renewal for %s (expires in %.0f days)", c.subdomain, daysUntil))
 		issueCert(s, acmeClient, c.subdomain)
 		renewed++
+	}
+
+	if renewed > 0 {
+		_ = s.SaveLastProactiveRenewal()
 	}
 }
 
