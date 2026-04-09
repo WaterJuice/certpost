@@ -32,8 +32,10 @@ type Entry struct {
 }
 
 var (
-	mu      sync.Mutex
-	entries []Entry
+	mu    sync.Mutex
+	ring  [maxEntries]Entry
+	head  int // next write position
+	count int // number of entries stored (up to maxEntries)
 )
 
 // Log adds a log entry and prints to stderr.
@@ -46,20 +48,24 @@ func Log(source, message string) {
 	}
 
 	mu.Lock()
-	entries = append(entries, entry)
-	if len(entries) > maxEntries {
-		entries = entries[len(entries)-maxEntries:]
+	ring[head] = entry
+	head = (head + 1) % maxEntries
+	if count < maxEntries {
+		count++
 	}
 	mu.Unlock()
 
 	fmt.Fprintf(os.Stderr, "  [%s] %s\n", source, message)
 }
 
-// GetEntries returns a copy of all log entries (newest last).
+// GetEntries returns a copy of all log entries (oldest first).
 func GetEntries() []Entry {
 	mu.Lock()
 	defer mu.Unlock()
-	result := make([]Entry, len(entries))
-	copy(result, entries)
+	result := make([]Entry, count)
+	start := (head - count + maxEntries) % maxEntries
+	for i := 0; i < count; i++ {
+		result[i] = ring[(start+i)%maxEntries]
+	}
 	return result
 }

@@ -117,20 +117,21 @@ func (c *CloudflareClient) deleteRecords(name, recordType string) error {
 	return nil
 }
 
-func (c *CloudflareClient) SetTXTRecord(name, value string) (string, error) {
-	_ = c.deleteRecords(name, "TXT")
-	result, err := c.apiCall("POST", fmt.Sprintf("/zones/%s/dns_records", c.zoneID), map[string]any{
-		"type":    "TXT",
-		"name":    name,
-		"content": value,
-		"ttl":     60,
-	})
+func (c *CloudflareClient) setRecord(recordType string, body map[string]any) (string, error) {
+	name, _ := body["name"].(string)
+	_ = c.deleteRecords(name, recordType)
+	body["type"] = recordType
+	result, err := c.apiCall("POST", fmt.Sprintf("/zones/%s/dns_records", c.zoneID), body)
 	if err != nil {
 		return "", err
 	}
 	rec, _ := result["result"].(map[string]any)
 	id, _ := rec["id"].(string)
 	return id, nil
+}
+
+func (c *CloudflareClient) SetTXTRecord(name, value string) (string, error) {
+	return c.setRecord("TXT", map[string]any{"name": name, "content": value, "ttl": 60})
 }
 
 func (c *CloudflareClient) RemoveTXTRecord(name string) error {
@@ -138,20 +139,7 @@ func (c *CloudflareClient) RemoveTXTRecord(name string) error {
 }
 
 func (c *CloudflareClient) SetARecord(name, ip string) (string, error) {
-	_ = c.deleteRecords(name, "A")
-	result, err := c.apiCall("POST", fmt.Sprintf("/zones/%s/dns_records", c.zoneID), map[string]any{
-		"type":    "A",
-		"name":    name,
-		"content": ip,
-		"ttl":     1,
-		"proxied": false,
-	})
-	if err != nil {
-		return "", err
-	}
-	rec, _ := result["result"].(map[string]any)
-	id, _ := rec["id"].(string)
-	return id, nil
+	return c.setRecord("A", map[string]any{"name": name, "content": ip, "ttl": 1, "proxied": false})
 }
 
 func (c *CloudflareClient) RemoveARecord(name string) error {
@@ -159,20 +147,7 @@ func (c *CloudflareClient) RemoveARecord(name string) error {
 }
 
 func (c *CloudflareClient) SetCNAMERecord(name, target string) (string, error) {
-	_ = c.deleteRecords(name, "CNAME")
-	result, err := c.apiCall("POST", fmt.Sprintf("/zones/%s/dns_records", c.zoneID), map[string]any{
-		"type":    "CNAME",
-		"name":    name,
-		"content": target,
-		"ttl":     1,
-		"proxied": false,
-	})
-	if err != nil {
-		return "", err
-	}
-	rec, _ := result["result"].(map[string]any)
-	id, _ := rec["id"].(string)
-	return id, nil
+	return c.setRecord("CNAME", map[string]any{"name": name, "content": target, "ttl": 1, "proxied": false})
 }
 
 func (c *CloudflareClient) RemoveCNAMERecord(name string) error {

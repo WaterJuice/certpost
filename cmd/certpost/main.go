@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,15 +34,6 @@ import (
 	"github.com/WaterJuice/certpost/internal/proxy"
 	"github.com/WaterJuice/certpost/internal/version"
 )
-
-const licenceText = `This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
-
-For more information, please refer to <https://unlicense.org/>`
 
 func main() {
 	os.Exit(run())
@@ -51,10 +43,10 @@ func run() int {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--license", "--licence":
-			fmt.Println(licenceText)
+			fmt.Println(version.LicenceText)
 			return 0
 		case "--version", "-v":
-			fmt.Printf("certpost: %s\ngo: %s\n", version.Version, runtime.Version())
+			fmt.Printf("certpost: %s\ngo: %s\n", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
 			return 0
 		}
 	}
@@ -305,7 +297,7 @@ func buildFetchConfig(serverURL string) map[string]any {
 	outputDir := prompt("Output directory for cert files", ".")
 	refreshStr := prompt("Refresh interval in hours (0 = once)", "0")
 	refreshHours := 0
-	if n := parseInt(refreshStr); n > 0 {
+	if n, err := strconv.Atoi(refreshStr); err == nil && n > 0 {
 		refreshHours = n
 	}
 
@@ -327,7 +319,7 @@ func buildProxyConfig(serverURL string) map[string]any {
 	}
 	refreshStr := prompt("Certificate refresh interval in hours", "24")
 	refreshHours := 24
-	if n := parseInt(refreshStr); n > 0 {
+	if n, err := strconv.Atoi(refreshStr); err == nil && n > 0 {
 		refreshHours = n
 	}
 
@@ -424,17 +416,6 @@ func loadConfig(path string) (map[string]any, error) {
 		return nil, fmt.Errorf("invalid JSON in %s: %w", path, err)
 	}
 	return result, nil
-}
-
-func parseInt(s string) int {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n
 }
 
 func isAllDigits(s string) bool {

@@ -97,8 +97,9 @@ func ResolveTokenDomain(serverURL, token string) string {
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	// Short timeout — this is an interactive lookup during init
+	shortClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := shortClient.Do(req)
 	if err != nil {
 		return ""
 	}
