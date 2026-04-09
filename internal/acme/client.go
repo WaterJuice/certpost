@@ -74,6 +74,9 @@ func (c *Client) fetchDirectory() error {
 
 func (c *Client) getNonce() (string, error) {
 	nonceURL, _ := c.directory["newNonce"].(string)
+	if nonceURL == "" {
+		return "", fmt.Errorf("ACME directory missing newNonce URL")
+	}
 	req, err := http.NewRequest("HEAD", nonceURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("build nonce request: %w", err)
@@ -187,6 +190,11 @@ func (c *Client) Initialise() error {
 
 // IssueCertificate issues a certificate for the given FQDN.
 func (c *Client) IssueCertificate(fqdn string) error {
+	// Re-fetch directory to ensure URLs are current
+	if err := c.fetchDirectory(); err != nil {
+		return fmt.Errorf("refresh ACME directory: %w", err)
+	}
+
 	c.log(fmt.Sprintf("Ordering certificate for %s...", fqdn))
 
 	// Create order
