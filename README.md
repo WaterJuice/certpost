@@ -27,14 +27,7 @@ Let's Encrypt certificate manager with DNS-01 challenges, web admin panel, and T
 make build
 ```
 
-Produces `output/certpost-server` and `output/certpost`.
-
-Cross-compile for Linux:
-
-```bash
-make build-linux-amd64
-make build-linux-arm64
-```
+Cross-compiles for all platforms and builds wheels. See `make help` for all targets.
 
 ## Server
 

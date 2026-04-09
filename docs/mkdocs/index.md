@@ -20,13 +20,12 @@ Managing SSL certificates across multiple services is tedious — requesting cer
 - **TLS termination proxy** — built-in proxy with SNI routing and automatic cert refresh
 - **Certificate fetch** — save `.crt` and `.key` files, with optional scheduled refresh
 - **Interactive setup** — wizards for both server and client configuration
-- **Zero dependencies** — stdlib only, shells out to system `openssl`
-- **Modular DNS** — protocol-based design makes it easy to add new providers
+- **Single static binary** — Go stdlib only, native crypto, no runtime dependencies
+- **Modular DNS** — interface-based design makes it easy to add new providers
 
 ## Requirements
 
-- Python 3.12+
-- System `openssl` binary (available on macOS and Linux)
+- Go 1.22+ (for building from source), or use pre-built binaries
 - A supported DNS provider: Cloudflare (API token + zone ID) or Technitium DNS Server (server URL + API token)
 
 ## Quick Start
@@ -35,6 +34,12 @@ Managing SSL certificates across multiple services is tedious — requesting cer
 
 ```bash
 pip install certpost
+```
+
+Or build from source:
+
+```bash
+make build
 ```
 
 ### Set up the server
@@ -73,6 +78,6 @@ See the [Usage](usage.md) page for full details.
 
 ## How It Works
 
-certpost-server runs an HTTP server with a web admin panel and certificate retrieval API. When you add a subdomain, a background thread creates an A or CNAME record via the configured DNS provider, then handles the ACME v2 flow: generates keys and a CSR using system `openssl`, sets a `_acme-challenge` TXT record via the ACME DNS provider, validates with Let's Encrypt, and stores the certificate. A renewal thread checks daily, proactively renewing the oldest certificates (2 per day) to keep them fresh, with a safety net that forces renewal for any cert within 30 days of expiry.
+certpost-server runs an HTTP server with a web admin panel and certificate retrieval API. When you add a subdomain, a background goroutine creates an A or CNAME record via the configured DNS provider, then handles the ACME v2 flow: generates keys and a CSR using native Go crypto, sets a `_acme-challenge` TXT record via the ACME DNS provider, validates with Let's Encrypt, and stores the certificate. A renewal goroutine checks daily, proactively renewing the oldest certificates (2 per day) to keep them fresh, with a safety net that forces renewal for any cert within 30 days of expiry.
 
-The client (`certpost proxy`) fetches certificates from the server using per-domain bearer tokens, loads them into an SSL context (temp files are deleted immediately after loading), and terminates TLS using SNI to pick the right certificate for each incoming connection. Plaintext traffic is forwarded to the configured backend. Certificates are refreshed automatically on a configurable interval (default 24 hours).
+The client (`certpost proxy`) fetches certificates from the server using per-domain bearer tokens, loads them into memory via `tls.X509KeyPair`, and terminates TLS using SNI to pick the right certificate for each incoming connection. Plaintext traffic is forwarded to the configured backend. Certificates are refreshed automatically on a configurable interval (default 24 hours).

@@ -55,6 +55,8 @@ internal/
 │   └── factory.go        # Provider factory (creates from config)
 ├── acme/
 │   └── client.go         # ACME v2 client (Let's Encrypt)
+├── colour/
+│   └── colour.go         # ANSI colour helpers (auto-disabled in pipes)
 ├── renewal/
 │   └── renewal.go        # Background certificate renewal goroutine
 ├── server/
@@ -84,7 +86,7 @@ Server features:
 - Per-domain API tokens (auto-generated when adding a domain, visible, rotatable)
 - Cert retrieval API at `/api/cert/<domain>` authenticated by per-domain bearer token
 - Creates A or CNAME records via the configured DNS provider when adding domains, removes them when deleting
-- Background renewal goroutine checks daily, proactively renews the 2 oldest certs per cycle to keep them fresh, with a 30-day expiry safety net
+- Background renewal goroutine checks daily, proactively renews the 2 oldest certs per cycle to keep them fresh, with a 30-day expiry safety net. Proactive renewal timestamp persisted to avoid re-issuing on restart. Errored domains retried automatically.
 - In-memory log buffer viewable in admin panel Logs tab
 - Info endpoints: `/api/version`, `/api/spec` (OpenAPI 3.0), `/api/help` (plain text)
 - `/api/token-info` — resolves a bearer token to its domain
@@ -121,6 +123,7 @@ Three subcommands: `fetch`, `proxy`, `init`. No command shows help.
 - `domains.json` — managed domains with status, target, per-domain API tokens
 - `certs/<domain>/cert.json` — certificate PEM data with ISO timestamps
 - `acme_account.json` — ACME account key and registration URL
+- `renewal_state.json` — timestamp of last proactive renewal cycle
 - Admin auth cookie is a SHA-256 hash of the admin key (no server-side session state)
 - Atomic writes via temp file + rename, mutex-protected
 
