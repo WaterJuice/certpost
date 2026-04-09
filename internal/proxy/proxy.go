@@ -163,14 +163,10 @@ func Run(cfg Config) error {
 	if listenAddr == "" {
 		listenAddr = "0.0.0.0:443"
 	}
-	host, port, err := net.SplitHostPort(listenAddr)
-	if err != nil {
+	if _, _, err := net.SplitHostPort(listenAddr); err != nil {
 		// Might be just a port number
-		host = "0.0.0.0"
-		port = listenAddr
-		listenAddr = host + ":" + port
+		listenAddr = "0.0.0.0:" + listenAddr
 	}
-	_ = host
 
 	// Build backend map
 	backendMap := make(map[string]string)

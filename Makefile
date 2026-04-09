@@ -45,6 +45,9 @@ build: check go-build docs
 	uv sync
 	uv run bin2whl -c wheel.json --version-str $(VERSION_STR)
 	cd html && python3 -m zipfile -c ../output/certpost-$(VERSION_STR)-docs.zip .
+	@ln -sf $$(pwd)/dist/certpost-server-$$(go env GOOS)-$$(go env GOARCH) .venv/bin/certpost-server
+	@ln -sf $$(pwd)/dist/certpost-$$(go env GOOS)-$$(go env GOARCH) .venv/bin/certpost
+	@echo "certpost-server and certpost linked into .venv/bin/"
 
 # Publish (requires output/ from make build)
 .PHONY: publish

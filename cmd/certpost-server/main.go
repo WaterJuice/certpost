@@ -18,31 +18,18 @@ package main
 
 import (
 	"bufio"
-	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/WaterJuice/certpost/internal/server"
+	"github.com/WaterJuice/certpost/internal/storage"
 	"github.com/WaterJuice/certpost/internal/version"
-)
-
-const (
-	tokenChars  = "abcdefghijklmnopqrstuvwxyz0123456789"
-	tokenLength = 40
-	licenceText = `This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
-
-For more information, please refer to <https://unlicense.org/>`
 )
 
 func main() {
@@ -53,10 +40,10 @@ func run() int {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--license", "--licence":
-			fmt.Println(licenceText)
+			fmt.Println(version.LicenceText)
 			return 0
 		case "--version", "-v":
-			fmt.Printf("certpost-server: %s\ngo: %s\n", version.Version, runtime.Version())
+			fmt.Printf("certpost-server: %s\ngo: %s\n", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
 			return 0
 		}
 	}
@@ -293,14 +280,14 @@ func runSetup(dataDir string) {
 	bind := prompt("Bind address", getStr(existing, "bind", "0.0.0.0"))
 	portStr := prompt("Port", "8443")
 	port := 8443
-	if p := parseInt(portStr); p > 0 {
+	if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
 		port = p
 	}
 
 	// Generate admin key if not present
 	adminKey := getStr(existing, "admin_key", "")
 	if adminKey == "" {
-		adminKey = generateToken()
+		adminKey = storage.GenerateToken()
 	}
 
 	config := map[string]any{
@@ -334,26 +321,6 @@ func runSetup(dataDir string) {
 
 	fmt.Printf("\nConfig saved to %s\n", configPath)
 	fmt.Printf("Admin key: %s\n\n", adminKey)
-}
-
-func generateToken() string {
-	b := make([]byte, tokenLength)
-	for i := range b {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(tokenChars))))
-		b[i] = tokenChars[n.Int64()]
-	}
-	return string(b)
-}
-
-func parseInt(s string) int {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n
 }
 
 func mapsEqual(a, b map[string]any) bool {

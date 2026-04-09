@@ -63,7 +63,7 @@ func (s *Storage) initialise() error {
 
 	configPath := filepath.Join(s.dataDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		adminKey := generateToken()
+		adminKey := GenerateToken()
 		defaultConfig := map[string]any{
 			"base_domain": "",
 			"admin_key":   adminKey,
@@ -232,7 +232,7 @@ func (s *Storage) AddDomain(subdomain, target string) (map[string]any, error) {
 		"subdomain":       subdomain,
 		"target":          target,
 		"status":          "pending",
-		"api_token":       generateToken(),
+		"api_token":       GenerateToken(),
 		"added_at":        time.Now().UTC().Format(time.RFC3339),
 		"cert_expires_at": nil,
 		"last_error":      nil,
@@ -308,7 +308,7 @@ func (s *Storage) RemoveDomain(subdomain string) error {
 
 // RotateDomainToken generates a new API token for a domain. Returns the new token.
 func (s *Storage) RotateDomainToken(subdomain string) (string, error) {
-	newToken := generateToken()
+	newToken := GenerateToken()
 	err := s.UpdateDomain(subdomain, map[string]any{"api_token": newToken})
 	return newToken, err
 }
@@ -349,10 +349,14 @@ func (s *Storage) SaveCert(subdomain, certPEM, chainPEM, keyPEM, expiresAt strin
 // GetCert retrieves certificate data for a subdomain, or nil if not found.
 func (s *Storage) GetCert(subdomain string) (map[string]any, error) {
 	certPath := filepath.Join(s.dataDir, "certs", subdomain, "cert.json")
-	if _, err := os.Stat(certPath); os.IsNotExist(err) {
-		return nil, nil
+	data, err := s.readJSON(certPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return s.readJSON(certPath)
+	return data, nil
 }
 
 // --- ACME Account ---
@@ -360,10 +364,14 @@ func (s *Storage) GetCert(subdomain string) (map[string]any, error) {
 // GetAcmeAccount retrieves the ACME account data, or nil if not registered.
 func (s *Storage) GetAcmeAccount() (map[string]any, error) {
 	accountPath := filepath.Join(s.dataDir, "acme_account.json")
-	if _, err := os.Stat(accountPath); os.IsNotExist(err) {
-		return nil, nil
+	data, err := s.readJSON(accountPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return s.readJSON(accountPath)
+	return data, nil
 }
 
 // SaveAcmeAccount saves ACME account registration data.
@@ -373,7 +381,8 @@ func (s *Storage) SaveAcmeAccount(data map[string]any) error {
 
 // --- Helpers ---
 
-func generateToken() string {
+// GenerateToken creates a cryptographically random token string.
+func GenerateToken() string {
 	b := make([]byte, tokenLength)
 	for i := range b {
 		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(tokenChars))))
