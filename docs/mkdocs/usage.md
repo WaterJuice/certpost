@@ -156,23 +156,26 @@ Returns the domain associated with the token:
 
 ## Client
 
-The client has three subcommands. Running `certpost` with no command shows help.
+The client has four subcommands. Running `certpost` with no command shows help.
 
 ### certpost fetch
 
 Download certificates and save as files.
 
 ```bash
-# One-shot fetch using CLI args
+# One-shot fetch — domain is resolved from the token
+certpost fetch -s http://certpost:8443 -t <token>
+
+# Domain passed explicitly (must match the token's domain)
 certpost fetch -s http://certpost:8443 -t <token> -d app.example.com
 
 # Save to a specific directory
-certpost fetch -s http://certpost:8443 -t <token> -d app.example.com -o /etc/ssl/certs
+certpost fetch -s http://certpost:8443 -t <token> -o /etc/ssl/certs
 
 # Auto-refresh every 24 hours
-certpost fetch -s http://certpost:8443 -t <token> -d app.example.com --refresh 24
+certpost fetch -s http://certpost:8443 -t <token> --refresh 24
 
-# Using a config file
+# Using a config file (single or multi-domain)
 certpost fetch -c fetch.json
 ```
 
@@ -182,12 +185,12 @@ certpost fetch -c fetch.json
 |---------------------|----------------------------------------------------------|
 | `--server`, `-s`    | certpost server URL                                      |
 | `--token`, `-t`     | Per-domain API token                                     |
-| `--domain`, `-d`    | Domain to fetch certificate for                          |
+| `--domain`, `-d`    | Domain to fetch certificate for (optional — resolved from token if omitted) |
 | `--output-dir`, `-o`| Directory to save files (default: current directory)     |
 | `--refresh`         | Re-fetch interval in hours (0 = once, default: 0)        |
 | `--config`, `-c`    | JSON config file (alternative to CLI flags)              |
 
-#### Fetch config file format
+#### Fetch config file format — single domain
 
 ```json
 {
@@ -198,6 +201,26 @@ certpost fetch -c fetch.json
   "refresh_hours": 24
 }
 ```
+
+#### Fetch config file format — multiple domains
+
+Add a `domains` map to fetch several certificates per cycle. When `domains` is
+present, the top-level `domain`/`token` fields are ignored.
+
+```json
+{
+  "server": "http://certpost:8443",
+  "output_dir": "/etc/ssl/certs",
+  "refresh_hours": 24,
+  "domains": {
+    "app.example.com": "token-for-app",
+    "api.example.com": "token-for-api"
+  }
+}
+```
+
+Each cycle fetches every listed domain. Individual failures are logged but do
+not stop the other fetches or halt the refresh loop.
 
 #### Output files
 
@@ -271,9 +294,28 @@ The wizard:
 
 - Asks whether you want a fetch or proxy config
 - Prompts for the server URL
-- For proxy: prompts for listen address, refresh interval, and routes
+- For fetch and proxy: prompts for refresh interval and one or more domains (enter an empty token to finish)
 - Auto-resolves domains from API tokens (via `/api/token-info`)
+- Writes a single-domain config when only one domain is added and a multi-domain form when more are added
 - Validates the configuration against the server before saving
+
+### certpost sample-config
+
+Print an example config to stdout — useful when you want a template without
+running the interactive wizard.
+
+```bash
+certpost sample-config fetch          # single-domain fetch config
+certpost sample-config fetch-multi    # multi-domain fetch config
+certpost sample-config proxy          # proxy config
+certpost sample-config proxy -o proxy.json   # write to file instead
+```
+
+| Kind          | Description                                       |
+|---------------|---------------------------------------------------|
+| `fetch`       | Single-domain fetch config                        |
+| `fetch-multi` | Multi-domain fetch config (uses `domains` map)    |
+| `proxy`       | TLS termination proxy config                      |
 
 ## Security
 

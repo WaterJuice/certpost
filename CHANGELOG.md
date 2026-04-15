@@ -1,3 +1,10 @@
+# certpost 1.0.0 Beta 11 - 15 Apr 2026
+
+- `certpost fetch` now supports fetching multiple certificates per cycle via a `domains` map in the config file (existing single-domain configs continue to work unchanged)
+- `certpost fetch --domain` is now optional — the domain is resolved from the token via `/api/token-info` when omitted; if supplied it must match
+- `certpost init` prompts for multiple domains when generating a fetch config
+- Added `certpost sample-config` command — prints example fetch, fetch-multi, or proxy config to stdout (or to a file with `-o`)
+
 # certpost 1.0.0 Beta 10 - 9 Apr 2026
 
 - Coloured CLI help matching Python 3.14 argparse theme (auto-disabled in pipes, respects NO_COLOR)
