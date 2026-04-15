@@ -1,9 +1,13 @@
-# certpost 1.0.0 Beta 11 - 15 Apr 2026
+# certpost 1.0.0 Beta 12 - 15 Apr 2026
 
 - `certpost fetch` now supports fetching multiple certificates per cycle via a `domains` map in the config file (existing single-domain configs continue to work unchanged)
 - `certpost fetch --domain` is now optional — the domain is resolved from the token via `/api/token-info` when omitted; if supplied it must match
 - `certpost init` prompts for multiple domains when generating a fetch config
 - Added `certpost sample-config` command — prints example fetch, fetch-multi, or proxy config to stdout (or to a file with `-o`)
+- Admin panel Domains tab redesigned — alphabetical sort, thin collapsible rows that expand on click, and multi-select with an Export modal that produces fetch config (single or multi-domain), proxy config, CSV (token, domain), or ready-to-run CLI commands
+- Admin panel scrolls to and expands the newly-added row after "Add & Issue"
+- Admin panel remembers the Export format and server URL on the server (stored in `prefs.json`); choice persists across browser sessions
+- Added `certpost-server run --demo` (beta builds only) — stubs DNS calls and disables ACME/renewal so the admin UI can be explored locally without touching real services
 
 # certpost 1.0.0 Beta 10 - 9 Apr 2026
 

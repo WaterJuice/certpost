@@ -41,6 +41,10 @@ The `--data-dir` (`-d`) flag is required — there is no default location.
 | `--data-dir`, `-d`  | Data directory (required)                |
 | `--port`, `-p`      | Port to listen on (default: 8443)        |
 | `--host`, `-H`      | Host to bind to (default: 0.0.0.0)       |
+| `--demo`            | Stub out DNS calls and disable ACME renewal (beta builds only) |
+
+!!! note "Demo mode"
+    `--demo` is intended for local GUI preview. It replaces both DNS providers with a no-op stub and skips ACME initialisation and the renewal goroutine, so the admin panel and APIs are fully interactive but no external services (Cloudflare, Technitium, Let's Encrypt) are ever contacted — even if you click Add / Remove / Rotate. The flag is only registered on beta builds; stable releases reject it.
 
 ### Configuration
 
@@ -99,14 +103,26 @@ Open `http://localhost:8443` and log in with your admin key (printed on server s
 - Issue a Let's Encrypt certificate via DNS-01 challenge
 - Generate a per-domain API token
 
-Each domain card shows:
+Domains are listed alphabetically as thin rows showing status and expiry. Click a row to expand it and see:
 
-- Status (pending, issuing, issued, error)
 - Target — IP address or CNAME (editable)
 - Certificate expiry date
-- API token (masked by default, click Show to reveal, Copy to clipboard)
+- API token (masked by default, Show/Copy/Rotate buttons)
 - Download button for `.crt` and `.key` files
-- Rotate button to regenerate the API token
+- Remove button
+
+#### Bulk export
+
+Each row has a checkbox. Once one or more domains are ticked, a bulk-action bar appears with an **Export…** button that opens a modal. Pick a format:
+
+| Format        | Output                                                   |
+|---------------|----------------------------------------------------------|
+| Fetch (JSON)  | A ready-to-use `certpost fetch` config. Single selection writes the flat `domain`/`token` form; multiple selections write a `domains` map. |
+| Fetch CLI     | One `certpost fetch -s … -t … -d …` line per selected domain. |
+| Proxy (JSON)  | A `certpost proxy` config with a `routes` map and a `127.0.0.1:8080` placeholder backend per domain (edit before use). |
+| CSV           | `token, domain` — note the space after the comma (not strict RFC 4180; strip leading whitespace on import if your tool needs it). |
+
+The server URL defaults to the page's own origin but can be overridden. Your chosen format and server URL are persisted to `prefs.json` in the data directory and remembered across browser sessions.
 
 **Logs** — real-time server logs showing ACME operations, DNS changes, errors, and certificate issuance progress.
 

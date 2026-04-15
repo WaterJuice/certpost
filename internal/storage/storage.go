@@ -405,6 +405,32 @@ func (s *Storage) SaveLastProactiveRenewal() error {
 	})
 }
 
+// GetPrefs returns the admin UI preferences stored in prefs.json. Returns
+// an empty map if the file doesn't exist yet.
+func (s *Storage) GetPrefs() (map[string]any, error) {
+	path := filepath.Join(s.dataDir, "prefs.json")
+	data, err := s.readJSON(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]any{}, nil
+		}
+		return nil, err
+	}
+	return data, nil
+}
+
+// SavePrefs merges the given updates into prefs.json.
+func (s *Storage) SavePrefs(updates map[string]any) error {
+	current, err := s.GetPrefs()
+	if err != nil {
+		return err
+	}
+	for k, v := range updates {
+		current[k] = v
+	}
+	return s.writeJSON(filepath.Join(s.dataDir, "prefs.json"), current)
+}
+
 // --- Helpers ---
 
 // GenerateToken creates a cryptographically random token string.

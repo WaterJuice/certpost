@@ -46,6 +46,14 @@ type Server struct {
 
 // Run starts the certpost HTTP server.
 func Run(host string, port int, dataDir string) error {
+	return RunWithOptions(host, port, dataDir, false)
+}
+
+// RunWithOptions starts the server with additional options. When demo is
+// true, DNS providers are replaced with no-op stubs and the renewal/ACME
+// network work is skipped — the admin panel and APIs still function for
+// local preview, but no external services are contacted.
+func RunWithOptions(host string, port int, dataDir string, demo bool) error {
 	s, err := storage.New(dataDir)
 	if err != nil {
 		return fmt.Errorf("initialise storage: %w", err)
@@ -58,19 +66,27 @@ func Run(host string, port int, dataDir string) error {
 
 	adminKey, _ := config["admin_key"].(string)
 	fmt.Fprintf(os.Stderr, "  Admin key: %s\n", adminKey)
+	if demo {
+		fmt.Fprintln(os.Stderr, "  Demo mode: DNS calls and ACME renewal are disabled")
+	}
 
-	// Initialise DNS providers
-	dnsShared, _ := config["dns"].(map[string]any)
-	if dnsShared == nil {
-		dnsShared = map[string]any{}
-	}
-	dnsAcmeConfig, _ := config["dns_acme"].(map[string]any)
-	if dnsAcmeConfig == nil {
-		dnsAcmeConfig = dnsShared
-	}
-	dnsRecordsConfig, _ := config["dns_records"].(map[string]any)
-	if dnsRecordsConfig == nil {
-		dnsRecordsConfig = dnsShared
+	dnsAcmeConfig := map[string]any{"provider": "demo"}
+	dnsRecordsConfig := map[string]any{"provider": "demo"}
+	if !demo {
+		dnsShared, _ := config["dns"].(map[string]any)
+		if dnsShared == nil {
+			dnsShared = map[string]any{}
+		}
+		if c, _ := config["dns_acme"].(map[string]any); c != nil {
+			dnsAcmeConfig = c
+		} else {
+			dnsAcmeConfig = dnsShared
+		}
+		if c, _ := config["dns_records"].(map[string]any); c != nil {
+			dnsRecordsConfig = c
+		} else {
+			dnsRecordsConfig = dnsShared
+		}
 	}
 
 	dnsAcme, err := dns.CreateProvider(dnsAcmeConfig)
@@ -87,15 +103,18 @@ func Run(host string, port int, dataDir string) error {
 	fmt.Fprintf(os.Stderr, "  DNS (ACME): %s\n", acmeProviderName)
 	fmt.Fprintf(os.Stderr, "  DNS (records): %s\n", recordsProviderName)
 
-	// Initialise ACME client
 	acmeClient := acme.NewClient(s, dnsAcme)
-	if err := acmeClient.Initialise(); err != nil {
-		logbuf.Log("server", fmt.Sprintf("Warning: ACME initialisation failed: %v", err))
-		logbuf.Log("server", "Certificate operations will not work until config is corrected.")
-	}
-
-	// Start renewal goroutine
 	ctx, cancel := context.WithCancel(context.Background())
+
+	if !demo {
+		if err := acmeClient.Initialise(); err != nil {
+			logbuf.Log("server", fmt.Sprintf("Warning: ACME initialisation failed: %v", err))
+			logbuf.Log("server", "Certificate operations will not work until config is corrected.")
+		}
+		renewal.Start(ctx, s, acmeClient)
+	} else {
+		logbuf.Log("server", "Demo mode active — ACME, DNS and renewal are no-ops")
+	}
 
 	srv := &Server{
 		storage:    s,
@@ -104,9 +123,6 @@ func Run(host string, port int, dataDir string) error {
 		cancelFunc: cancel,
 	}
 
-	renewal.Start(ctx, s, acmeClient)
-
-	// Set up routes
 	mux := http.NewServeMux()
 
 	// Public routes
@@ -124,6 +140,8 @@ func Run(host string, port int, dataDir string) error {
 	mux.HandleFunc("GET /api/domains", srv.requireAdmin(srv.handleGetDomains))
 	mux.HandleFunc("GET /api/base-domain", srv.requireAdmin(srv.handleGetBaseDomain))
 	mux.HandleFunc("GET /api/logs", srv.requireAdmin(srv.handleGetLogs))
+	mux.HandleFunc("GET /api/prefs", srv.requireAdmin(srv.handleGetPrefs))
+	mux.HandleFunc("POST /api/prefs", srv.requireAdmin(srv.handleSavePrefs))
 	mux.HandleFunc("POST /api/domains", srv.requireAdmin(srv.handleAddDomain))
 	mux.HandleFunc("POST /api/domains/{sub...}", srv.handleDomainPost)
 	mux.HandleFunc("DELETE /api/domains/{sub...}", srv.requireAdmin(srv.handleRemoveDomain))
@@ -224,6 +242,42 @@ func (s *Server) handleGetBaseDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	baseDomain, _ := config["base_domain"].(string)
 	sendJSON(w, 200, map[string]string{"base_domain": baseDomain})
+}
+
+func (s *Server) handleGetPrefs(w http.ResponseWriter, r *http.Request) {
+	prefs, err := s.storage.GetPrefs()
+	if err != nil {
+		sendError(w, 500, err.Error())
+		return
+	}
+	sendJSON(w, 200, prefs)
+}
+
+// allowedPrefKeys lists every key the admin panel is permitted to persist
+// in prefs.json. Unknown keys are rejected so typos or future client bugs
+// can't silently accumulate stale entries on disk.
+var allowedPrefKeys = map[string]bool{
+	"export_format": true,
+	"export_server": true,
+}
+
+func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(r)
+	if err != nil {
+		sendError(w, 400, "Invalid JSON")
+		return
+	}
+	for k := range body {
+		if !allowedPrefKeys[k] {
+			sendError(w, 400, fmt.Sprintf("unknown preference key: %q", k))
+			return
+		}
+	}
+	if err := s.storage.SavePrefs(body); err != nil {
+		sendError(w, 500, err.Error())
+		return
+	}
+	sendJSON(w, 200, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {

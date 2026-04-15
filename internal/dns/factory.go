@@ -18,7 +18,8 @@ package dns
 import "fmt"
 
 // CreateProvider creates a DNS provider from a configuration map.
-// The map must have a "provider" key set to "cloudflare" or "technitium".
+// The map must have a "provider" key set to "cloudflare", "technitium",
+// or "demo" (a no-op stub for local preview).
 func CreateProvider(config map[string]any) (Provider, error) {
 	providerName, _ := config["provider"].(string)
 	if providerName == "" {
@@ -26,6 +27,9 @@ func CreateProvider(config map[string]any) (Provider, error) {
 	}
 
 	switch providerName {
+	case "demo":
+		return &demoProvider{}, nil
+
 	case "cloudflare":
 		apiToken, _ := config["api_token"].(string)
 		zoneID, _ := config["zone_id"].(string)
