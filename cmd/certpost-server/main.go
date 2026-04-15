@@ -112,20 +112,27 @@ func runHelp() {
 	s := colour.ShortOpt
 	l := colour.Label
 	r := colour.Reset
-	fmt.Fprintf(os.Stdout, `%susage:%s certpost-server run [%s--port%s %sPORT%s] [%s--host%s %sHOST%s] %s--data-dir%s %sDIR%s
+	demoUsage := ""
+	demoOpt := ""
+	if version.IsBeta() {
+		demoUsage = fmt.Sprintf(" [%s--demo%s]", o, r)
+		demoOpt = fmt.Sprintf("\n  %s--demo%s               Stub out DNS calls and disable ACME renewal (for local GUI preview)", o, r)
+	}
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost-server run [%s--port%s %sPORT%s] [%s--host%s %sHOST%s]%s %s--data-dir%s %sDIR%s
 
 Start the certpost server
 
 %soptions:%s
   %s--port%s, %s-p%s %sPORT%s       Port to listen on (default: 8443)
   %s--host%s, %s-H%s %sHOST%s       Host to bind to (default: 0.0.0.0)
-  %s--data-dir%s, %s-d%s %sDIR%s   Data directory containing config.json
+  %s--data-dir%s, %s-d%s %sDIR%s   Data directory containing config.json%s
 `,
-		h, r, o, r, l, r, o, r, l, r, o, r, l, r,
+		h, r, o, r, l, r, o, r, l, r, demoUsage, o, r, l, r,
 		h, r,
 		o, r, s, r, l, r,
 		o, r, s, r, l, r,
 		o, r, s, r, l, r,
+		demoOpt,
 	)
 }
 
@@ -138,6 +145,10 @@ func runCmd() int {
 	fs.IntVar(port, "port", 8443, "")
 	host := fs.String("H", "0.0.0.0", "")
 	fs.StringVar(host, "host", "0.0.0.0", "")
+	demo := false
+	if version.IsBeta() {
+		fs.BoolVar(&demo, "demo", false, "")
+	}
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		if err == flag.ErrHelp {
@@ -178,7 +189,7 @@ func runCmd() int {
 	fmt.Fprintf(os.Stderr, "certpost-server %s\n", version.Version)
 	fmt.Fprintf(os.Stderr, "Serving on http://%s:%d\n", *host, *port)
 
-	if err := server.Run(*host, *port, *dataDir); err != nil {
+	if err := server.RunWithOptions(*host, *port, *dataDir, demo); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}

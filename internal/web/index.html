@@ -62,17 +62,63 @@
 
         .card-body { padding: 16px; }
 
-        /* Domain card */
-        .domain-card { position: relative; }
+        /* Domain row (collapsed) */
+        .domain-row {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            overflow: hidden;
+        }
 
-        .domain-name {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 12px;
+        .domain-row-head {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            padding: 8px 12px;
+            cursor: pointer;
+            user-select: none;
         }
+
+        .domain-row-head:hover { background: var(--bg-tertiary); }
+
+        .domain-row-head input[type=checkbox] {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .domain-row-head .domain-name-inline {
+            font-weight: 600;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .domain-row-head .expires {
+            color: var(--text-muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .domain-row-head .chevron {
+            color: var(--text-muted);
+            font-size: 12px;
+            transition: transform 0.15s ease;
+        }
+
+        .domain-row.expanded .chevron { transform: rotate(90deg); }
+
+        .domain-row-body {
+            display: none;
+            padding: 12px 14px 14px;
+            border-top: 1px solid var(--border);
+        }
+
+        .domain-row.expanded .domain-row-body { display: block; }
 
         .domain-meta {
             display: grid;
@@ -324,6 +370,137 @@
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
         }
 
+        /* Bulk-action bar */
+        .bulk-bar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+        }
+
+        .bulk-bar.active { display: flex; }
+        .bulk-bar .bulk-count { font-size: 13px; color: var(--text-muted); }
+        .bulk-bar .bulk-actions { display: flex; gap: 8px; }
+
+        .list-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 16px 0 8px;
+            padding: 0 2px;
+        }
+
+        .list-toolbar label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .list-toolbar input[type=checkbox] { width: auto; accent-color: var(--accent); }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: 640px;
+            max-width: 92vw;
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h3 { font-size: 15px; font-weight: 600; }
+
+        .modal-body { padding: 16px; overflow-y: auto; }
+        .modal-footer {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .modal select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .modal textarea {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            width: 100%;
+            min-height: 280px;
+            resize: vertical;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 200;
+        }
+
+        .toast.active {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.error { border-color: var(--red); color: var(--red); }
+
         @media (max-width: 600px) {
             .domain-meta { grid-template-columns: 1fr; }
             .container { padding: 16px; }
@@ -332,6 +509,7 @@
 </head>
 <body>
     <div class="beta-ribbon">Beta</div>
+    <div id="toast" class="toast"></div>
     <header>
         <h1>certpost <span>certificate manager</span> <span id="header-version"></span></h1>
         <div style="display: flex; align-items: center; gap: 16px;">
@@ -393,12 +571,60 @@
                 </div>
             </div>
 
+            <!-- Bulk bar (shown when any domain is selected) -->
+            <div id="bulk-bar" class="bulk-bar">
+                <span class="bulk-count"><span id="bulk-count">0</span> selected</span>
+                <div class="bulk-actions">
+                    <button class="btn btn-primary btn-sm" onclick="openExportModal()">Export…</button>
+                    <button class="btn btn-secondary btn-sm" onclick="clearSelection()">Clear</button>
+                </div>
+            </div>
+
+            <!-- List toolbar -->
+            <div id="list-toolbar" class="list-toolbar" style="display: none;">
+                <label><input type="checkbox" id="select-all" onclick="toggleSelectAll(this.checked)"> Select all</label>
+                <span id="list-count" style="font-size: 12px; color: var(--text-muted);"></span>
+            </div>
+
             <!-- Domain list -->
             <div id="domains-list">
                 <div class="empty-state">Loading...</div>
             </div>
 
         </div>
+        </div>
+
+        <!-- Export modal -->
+        <div id="export-modal" class="modal-overlay" onclick="if(event.target===this)closeExportModal()">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Export selected domains</h3>
+                    <button class="btn btn-secondary btn-sm" onclick="closeExportModal()">Close</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Server URL (as seen by clients)</label>
+                        <input type="text" id="export-server" placeholder="https://certpost.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Format</label>
+                        <select id="export-format" onchange="onExportFormatChange()">
+                            <option value="fetch">Fetch config (JSON)</option>
+                            <option value="cli">Fetch CLI commands</option>
+                            <option value="proxy">Proxy config (JSON)</option>
+                            <option value="csv">CSV (token, domain)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Output</label>
+                        <textarea id="export-output" readonly></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadExport()">Download</button>
+                    <button class="btn btn-primary btn-sm" onclick="copyExport()">Copy</button>
+                </div>
+            </div>
         </div>
 
         <div id="tab-logs" class="tab-content">
@@ -443,6 +669,7 @@
             document.getElementById('admin-screen').style.display = 'block';
             document.getElementById('logout-btn').style.display = '';
             loadBaseDomain();
+            loadPrefs();
             loadDomains();
         }
 
@@ -503,29 +730,65 @@
         }
 
         // Domains
+        const _selected = new Set();
+        const _expanded = new Set();
+        const _revealedTokens = new Set();
+        let _domainsCache = [];
+        let _lastRenderKey = '';
+
         async function loadDomains() {
             const data = await api('GET', '/api/domains');
-            const container = document.getElementById('domains-list');
+            _domainsCache = (data.domains || []).slice().sort((a, b) =>
+                a.subdomain.localeCompare(b.subdomain));
+            const existing = new Set(_domainsCache.map(d => d.subdomain));
+            for (const s of Array.from(_selected)) if (!existing.has(s)) _selected.delete(s);
+            renderDomains();
+        }
 
-            if (!data.domains || data.domains.length === 0) {
+        function renderDomains() {
+            const list = _domainsCache;
+            const container = document.getElementById('domains-list');
+            const toolbar = document.getElementById('list-toolbar');
+
+            const key = JSON.stringify([
+                list.map(d => [d.subdomain, d.status, d.target, d.last_error, d.cert_expires_at, d.api_token]),
+                Array.from(_selected).sort(),
+                Array.from(_expanded).sort(),
+                Array.from(_revealedTokens).sort(),
+            ]);
+            if (key === _lastRenderKey) return;
+            _lastRenderKey = key;
+
+            if (list.length === 0) {
                 container.innerHTML = '<div class="empty-state">No domains configured yet.</div>';
+                toolbar.style.display = 'none';
+                updateBulkBar();
                 return;
             }
 
-            container.innerHTML = data.domains.map(d => {
+            toolbar.style.display = '';
+            document.getElementById('list-count').textContent = `${list.length} domain${list.length === 1 ? '' : 's'}`;
+
+            container.innerHTML = list.map(d => {
                 const enc = encodeURIComponent(d.subdomain);
+                const sel = _selected.has(d.subdomain) ? 'checked' : '';
+                const exp = _expanded.has(d.subdomain) ? 'expanded' : '';
                 const hasError = d.last_error ? `<div class="error-text">${d.last_error}</div>` : '';
                 const downloadBtn = d.status === 'issued'
                     ? `<button class="btn btn-secondary btn-sm" onclick="downloadCert('${d.subdomain}', '${d.api_token}')">Download</button>`
                     : '';
+                const expires = d.cert_expires_at ? 'expires ' + formatDate(d.cert_expires_at) : '';
 
                 return `
-                <div class="card domain-card">
-                    <div class="card-body">
-                        <div class="domain-name">
-                            ${d.subdomain}
-                            <span class="badge badge-${d.status}">${d.status}</span>
-                        </div>
+                <div class="domain-row ${exp}" id="row-${enc}">
+                    <div class="domain-row-head" onclick="toggleExpand(event, '${d.subdomain}')">
+                        <input type="checkbox" ${sel} onclick="event.stopPropagation(); toggleSelect('${d.subdomain}', this.checked)">
+                        <span class="domain-name-inline">${d.subdomain}</span>
+                        <span class="badge badge-${d.status}">${d.status}</span>
+                        <span class="expires">${expires}</span>
+                        <span class="chevron">▸</span>
+                    </div>
+                    <div class="domain-row-body">
                         ${hasError}
                         <div class="domain-meta">
                             <div class="meta-item">
@@ -555,7 +818,201 @@
                     </div>
                 </div>`;
             }).join('');
+
+            const selAll = document.getElementById('select-all');
+            selAll.checked = list.length > 0 && list.every(d => _selected.has(d.subdomain));
+            updateBulkBar();
         }
+
+        function toggleExpand(ev, subdomain) {
+            if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'BUTTON') return;
+            const row = document.getElementById('row-' + encodeURIComponent(subdomain));
+            if (!row) return;
+            if (_expanded.has(subdomain)) {
+                _expanded.delete(subdomain);
+                row.classList.remove('expanded');
+            } else {
+                _expanded.add(subdomain);
+                row.classList.add('expanded');
+            }
+        }
+
+        function toggleSelect(subdomain, checked) {
+            if (checked) _selected.add(subdomain); else _selected.delete(subdomain);
+            const selAll = document.getElementById('select-all');
+            selAll.checked = _domainsCache.length > 0 && _domainsCache.every(d => _selected.has(d.subdomain));
+            updateBulkBar();
+        }
+
+        function toggleSelectAll(checked) {
+            _selected.clear();
+            if (checked) _domainsCache.forEach(d => _selected.add(d.subdomain));
+            renderDomains();
+        }
+
+        function clearSelection() {
+            _selected.clear();
+            renderDomains();
+        }
+
+        function updateBulkBar() {
+            const bar = document.getElementById('bulk-bar');
+            document.getElementById('bulk-count').textContent = _selected.size;
+            if (_selected.size > 0) bar.classList.add('active');
+            else bar.classList.remove('active');
+        }
+
+        // Export
+        let _prefs = {};
+        async function loadPrefs() {
+            _prefs = await api('GET', '/api/prefs') || {};
+        }
+
+        async function openExportModal() {
+            if (_selected.size === 0) return;
+            document.getElementById('export-server').value = _prefs.export_server || window.location.origin;
+            document.getElementById('export-format').value = _prefs.export_format || 'fetch';
+            renderExport();
+            document.getElementById('export-modal').classList.add('active');
+        }
+
+        async function savePrefs(updates) {
+            Object.assign(_prefs, updates);
+            const res = await api('POST', '/api/prefs', updates);
+            if (res && res.error) {
+                showToast('Could not save preference: ' + res.error, true);
+            }
+        }
+
+        function closeExportModal() {
+            document.getElementById('export-modal').classList.remove('active');
+        }
+
+        function selectedEntries() {
+            return _domainsCache
+                .filter(d => _selected.has(d.subdomain) && d.api_token)
+                .map(d => ({ domain: d.subdomain, token: d.api_token }));
+        }
+
+        function renderExport() {
+            const fmt = document.getElementById('export-format').value;
+            const server = document.getElementById('export-server').value.trim().replace(/\/+$/, '');
+            const entries = selectedEntries();
+            if (entries.length === 0) {
+                document.getElementById('export-output').value =
+                    '# No exportable entries — selected domains have no issued API token yet.\n';
+                return;
+            }
+            let out = '';
+            if (fmt === 'fetch') {
+                if (entries.length === 1) {
+                    out = JSON.stringify({
+                        server,
+                        domain: entries[0].domain,
+                        token: entries[0].token,
+                        output_dir: '.',
+                        refresh_hours: 24,
+                    }, null, 2);
+                } else {
+                    const domains = {};
+                    entries.forEach(e => { domains[e.domain] = e.token; });
+                    out = JSON.stringify({
+                        server,
+                        output_dir: '.',
+                        refresh_hours: 24,
+                        domains,
+                    }, null, 2);
+                }
+            } else if (fmt === 'cli') {
+                out = entries.map(e =>
+                    `certpost fetch -s ${server} -t ${e.token} -d ${e.domain}`
+                ).join('\n');
+            } else if (fmt === 'csv') {
+                const esc = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+                out = 'token, domain\n' + entries.map(e => esc(e.token) + ', ' + esc(e.domain)).join('\n');
+            } else if (fmt === 'proxy') {
+                const routes = {};
+                entries.forEach(e => { routes[e.domain] = { token: e.token, backend: '127.0.0.1:8080' }; });
+                out = JSON.stringify({
+                    server,
+                    listen: '0.0.0.0:443',
+                    refresh_hours: 24,
+                    routes,
+                }, null, 2);
+            }
+            document.getElementById('export-output').value = out + '\n';
+        }
+
+        let _toastTimer = null;
+        function showToast(message, isError) {
+            const el = document.getElementById('toast');
+            el.textContent = message;
+            el.classList.toggle('error', !!isError);
+            el.classList.add('active');
+            clearTimeout(_toastTimer);
+            _toastTimer = setTimeout(() => el.classList.remove('active'), 1800);
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text).then(() => true, () => false);
+            }
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve(ok);
+        }
+
+        async function copyExport() {
+            const text = document.getElementById('export-output').value;
+            const ok = await copyText(text);
+            showToast(ok ? 'Copied to clipboard' : 'Copy failed — select the text manually', !ok);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' &&
+                document.getElementById('export-modal').classList.contains('active')) {
+                closeExportModal();
+            }
+        });
+
+        function downloadExport() {
+            const fmt = document.getElementById('export-format').value;
+            const content = document.getElementById('export-output').value;
+            const name = fmt === 'cli' ? 'certpost-fetch.sh'
+                : fmt === 'proxy' ? 'proxy.json'
+                : fmt === 'csv' ? 'certpost-domains.csv'
+                : 'fetch.json';
+            const blob = new Blob([content], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+        }
+
+        function onExportFormatChange() {
+            const fmt = document.getElementById('export-format').value;
+            savePrefs({ export_format: fmt });
+            renderExport();
+        }
+
+        let _serverPrefTimer = null;
+        document.addEventListener('input', (e) => {
+            if (e.target.id !== 'export-server') return;
+            renderExport();
+            clearTimeout(_serverPrefTimer);
+            _serverPrefTimer = setTimeout(() => {
+                savePrefs({ export_server: e.target.value.trim() });
+            }, 400);
+        });
 
         async function addDomain() {
             const subInput = document.getElementById('new-subdomain');
@@ -567,7 +1024,15 @@
             await api('POST', '/api/domains', { subdomain, target });
             subInput.value = '';
             targetInput.value = '';
-            loadDomains();
+            const base = document.getElementById('domain-suffix').textContent.replace(/^\./, '');
+            const fqdn = base ? subdomain + '.' + base : subdomain;
+            await loadDomains();
+            const row = document.getElementById('row-' + encodeURIComponent(fqdn));
+            if (row) {
+                _expanded.add(fqdn);
+                row.classList.add('expanded');
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
 
         async function removeDomain(subdomain) {
@@ -581,8 +1046,6 @@
             await api('POST', '/api/domains/' + encodeURIComponent(subdomain) + '/rotate');
             loadDomains();
         }
-
-        const _revealedTokens = new Set();
 
         function maskToken(token) {
             const show = 4;
@@ -603,15 +1066,9 @@
             }
         }
 
-        function copyToken(token) {
-            const ta = document.createElement('textarea');
-            ta.value = token;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
+        async function copyToken(token) {
+            const ok = await copyText(token);
+            showToast(ok ? 'Token copied' : 'Copy failed — select the text manually', !ok);
         }
 
         async function editTarget(subdomain) {

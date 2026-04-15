@@ -78,7 +78,7 @@ internal/
 Two subcommands: `run` and `setup`. Both require `--data-dir` / `-d` (no default location).
 
 - `setup` — interactive wizard to create config.json
-- `run` — starts the HTTP server, requires config.json to exist
+- `run` — starts the HTTP server, requires config.json to exist. Accepts `--demo` on beta builds (detected by `version.IsBeta()`) to swap DNS providers for a no-op stub and skip ACME init / renewal, letting the admin panel run against a real data dir without touching any external service.
 
 Server features:
 - Uses `net/http.ServeMux` with Go 1.22+ method-aware routing
@@ -90,6 +90,8 @@ Server features:
 - In-memory log buffer viewable in admin panel Logs tab
 - Info endpoints: `/api/version`, `/api/spec` (OpenAPI 3.0), `/api/help` (plain text)
 - `/api/token-info` — resolves a bearer token to its domain
+- `/api/prefs` (GET/POST, admin-only) — persists admin-panel UI preferences in `prefs.json`; POST body keys are validated against an allowlist
+- Admin panel Domains tab: alphabetical list of thin collapsible rows, multi-select with bulk Export modal (fetch JSON, proxy JSON, CLI commands, or CSV); remembers chosen format and server URL via `/api/prefs`
 
 ### DNS Provider
 
@@ -97,6 +99,7 @@ Server features:
 - `dns/factory.go` provides a `CreateProvider()` factory that creates providers from config maps
 - `dns/cloudflare.go` implements the interface for the Cloudflare API
 - `dns/technitium.go` implements the interface for the Technitium DNS Server API
+- `dns/demo.go` is a no-op provider used by `certpost-server run --demo` (beta builds only); logs every call to the log buffer but makes no network requests
 - The server uses two provider instances: one for ACME challenges (TXT records) and one for domain records (A/CNAME)
 - A single `dns` config key can be used when both roles use the same provider; `dns_acme` and `dns_records` override individually for split configurations
 
@@ -125,6 +128,7 @@ Four subcommands: `fetch`, `proxy`, `init`, `sample-config`. No command shows he
 - `certs/<domain>/cert.json` — certificate PEM data with ISO timestamps
 - `acme_account.json` — ACME account key and registration URL
 - `renewal_state.json` — timestamp of last proactive renewal cycle
+- `prefs.json` — admin-panel UI preferences (e.g. remembered Export format and server URL); keys restricted by an allowlist in the server
 - Admin auth cookie is a SHA-256 hash of the admin key (no server-side session state)
 - Atomic writes via temp file + rename, mutex-protected
 
