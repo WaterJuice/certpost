@@ -110,11 +110,12 @@ Server features:
 
 ### Client (`certpost`)
 
-Three subcommands: `fetch`, `proxy`, `init`. No command shows help.
+Four subcommands: `fetch`, `proxy`, `init`, `sample-config`. No command shows help.
 
-- `fetch` — downloads cert as `<domain>.crt` and `<domain>.key` files. Supports `--refresh` for periodic re-fetching. Can use CLI args or a JSON config file.
+- `fetch` — downloads cert as `<domain>.crt` and `<domain>.key` files. Supports `--refresh` for periodic re-fetching. Can use CLI args or a JSON config file. Config supports a single `domain`/`token` pair or a `domains` map (`{domain: token}`) for multiple certs per cycle.
 - `proxy` — TLS termination proxy. Fetches certs from server, terminates TLS with SNI routing via `tls.Config.GetCertificate`, forwards plaintext to backends. Auto-refreshes certs (default 24h). Requires JSON config file.
-- `init` — interactive wizard to generate a fetch or proxy config file. Resolves domains from tokens via `/api/token-info` and validates against the server.
+- `init` — interactive wizard to generate a fetch or proxy config file. Resolves domains from tokens via `/api/token-info` and validates against the server. Fetch mode accepts multiple domains; writes the legacy flat form when one domain is added and a `domains` map when several are added.
+- `sample-config` — prints an example config (`fetch`, `fetch-multi`, or `proxy`) to stdout, or writes it to a file with `-o`.
 
 ### Storage
 

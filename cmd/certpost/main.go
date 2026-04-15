@@ -63,6 +63,8 @@ func run() int {
 		return proxyCmd()
 	case "init":
 		return initCmd()
+	case "sample-config":
+		return sampleConfigCmd()
 	case "--help", "-h", "help":
 		printHelp()
 		return 0
@@ -87,9 +89,10 @@ func printHelp() {
   3. %scertpost proxy%s %s--config%s config.json — run a TLS termination proxy
 
 %scommands:%s
-  %sfetch%s    Fetch certificates and save as .crt/.key files
-  %sproxy%s    TLS termination proxy with auto-refreshing certs
-  %sinit%s     Generate a config file interactively
+  %sfetch%s           Fetch certificates and save as .crt/.key files
+  %sproxy%s           TLS termination proxy with auto-refreshing certs
+  %sinit%s            Generate a config file interactively
+  %ssample-config%s   Print an example fetch or proxy config to stdout
 
 %sflags:%s
   %s--version%s   Show version and exit
@@ -102,6 +105,7 @@ func printHelp() {
 		c, r, o, r,
 		c, r, o, r,
 		h, r,
+		s, r,
 		s, r,
 		s, r,
 		s, r,
@@ -122,7 +126,10 @@ func fetchHelp() {
 	r := colour.Reset
 	fmt.Fprintf(os.Stdout, `%susage:%s certpost fetch [%s--config%s %sFILE%s] [%s--server%s %sURL%s %s--token%s %sTOKEN%s %s--domain%s %sDOMAIN%s]
 
-Fetch certificates and save as .crt/.key files
+Fetch certificates and save as .crt/.key files. If --domain is omitted the
+domain is resolved from the token via the server. A config file with a
+"domains" map ({ "domain": "token", ... }) will fetch multiple certificates
+per cycle.
 
 %soptions:%s
   %s--config%s, %s-c%s %sFILE%s        JSON config file
@@ -165,7 +172,9 @@ func fetchCmd() int {
 		return 1
 	}
 
-	// Load from config file if provided
+	type domainToken struct{ domain, token string }
+	var domains []domainToken
+
 	if *configFile != "" {
 		config, err := loadConfig(*configFile)
 		if err != nil {
@@ -187,33 +196,65 @@ func fetchCmd() int {
 		if h, ok := config["refresh_hours"].(float64); ok && *refresh == 0 {
 			*refresh = int(h)
 		}
+		if m, ok := config["domains"].(map[string]any); ok {
+			if _, flat := config["domain"]; flat {
+				fmt.Fprintln(os.Stderr, "Warning: config has both \"domains\" map and top-level \"domain\"/\"token\" — using \"domains\"")
+			}
+			for d, tRaw := range m {
+				t, ok := tRaw.(string)
+				if !ok || t == "" {
+					fmt.Fprintf(os.Stderr, "Error: domains[%q] must be a non-empty token string\n", d)
+					return 1
+				}
+				domains = append(domains, domainToken{d, t})
+			}
+		}
 	}
 
-	if *serverURL == "" || *token == "" || *domain == "" {
-		fmt.Fprintln(os.Stderr, "Error: --server, --token, and --domain are required (or use --config)")
+	if len(domains) == 0 {
+		if *serverURL == "" || *token == "" {
+			fmt.Fprintln(os.Stderr, "Error: --server and --token are required (or use --config with \"domain\"/\"token\" or \"domains\")")
+			return 1
+		}
+		resolved := client.ResolveTokenDomain(*serverURL, *token)
+		if *domain == "" {
+			if resolved == "" {
+				fmt.Fprintln(os.Stderr, "Error: could not resolve domain from token — pass --domain explicitly")
+				return 1
+			}
+			*domain = resolved
+		} else if resolved != "" && resolved != *domain {
+			fmt.Fprintf(os.Stderr, "Error: --domain %q does not match token's domain %q\n", *domain, resolved)
+			return 1
+		}
+		domains = append(domains, domainToken{*domain, *token})
+	} else if *serverURL == "" {
+		fmt.Fprintln(os.Stderr, "Error: --server is required (or set \"server\" in config)")
 		return 1
 	}
 
 	refreshSeconds := *refresh * 3600
 
 	for {
-		fmt.Fprintf(os.Stderr, "Fetching certificate for %s...\n", *domain)
-		data, err := client.FetchCert(*serverURL, *token, *domain)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			if refreshSeconds <= 0 {
-				return 1
+		anyFailed := false
+		for _, dt := range domains {
+			fmt.Fprintf(os.Stderr, "Fetching certificate for %s...\n", dt.domain)
+			data, err := client.FetchCert(*serverURL, dt.token, dt.domain)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				anyFailed = true
+				continue
 			}
-		} else {
-			if err := client.SaveCert(*outputDir, *domain, data); err != nil {
+			if err := client.SaveCert(*outputDir, dt.domain, data); err != nil {
 				fmt.Fprintf(os.Stderr, "Error saving cert: %v\n", err)
-				if refreshSeconds <= 0 {
-					return 1
-				}
+				anyFailed = true
 			}
 		}
 
 		if refreshSeconds <= 0 {
+			if anyFailed {
+				return 1
+			}
 			break
 		}
 
@@ -390,10 +431,28 @@ func initCmd() int {
 	return 0
 }
 
+// promptTokenDomain prompts for an API token and resolves (or asks for) its
+// domain. Returns ("", "") when the user enters an empty token to end input.
+func promptTokenDomain(serverURL string) (domain, token string) {
+	for {
+		token = prompt("API token (from certpost admin panel)", "")
+		if token == "" {
+			return "", ""
+		}
+		domain = client.ResolveTokenDomain(serverURL, token)
+		if domain != "" {
+			fmt.Printf("  Domain: %s\n", domain)
+			return domain, token
+		}
+		domain = prompt("  Could not look up domain. Enter it manually", "")
+		if domain != "" {
+			return domain, token
+		}
+	}
+}
+
 func buildFetchConfig(serverURL string) map[string]any {
 	fmt.Println("\nFetch settings:")
-	domain := prompt("Domain (e.g. app.example.com)", "")
-	token := prompt("API token for this domain", "")
 	outputDir := prompt("Output directory for cert files", ".")
 	refreshStr := prompt("Refresh interval in hours (0 = once)", "0")
 	refreshHours := 0
@@ -401,13 +460,34 @@ func buildFetchConfig(serverURL string) map[string]any {
 		refreshHours = n
 	}
 
-	return map[string]any{
+	fmt.Println("\nAdd domains. Enter empty token when done.")
+	fmt.Println()
+	domains := map[string]any{}
+	for {
+		domain, token := promptTokenDomain(serverURL)
+		if token == "" {
+			break
+		}
+		domains[domain] = token
+		fmt.Println()
+	}
+
+	cfg := map[string]any{
 		"server":        serverURL,
-		"domain":        domain,
-		"token":         token,
 		"output_dir":    outputDir,
 		"refresh_hours": refreshHours,
 	}
+
+	// Single domain: keep legacy flat form so older clients still read it.
+	if len(domains) == 1 {
+		for d, t := range domains {
+			cfg["domain"] = d
+			cfg["token"] = t
+		}
+	} else {
+		cfg["domains"] = domains
+	}
+	return cfg
 }
 
 func buildProxyConfig(serverURL string) map[string]any {
@@ -427,21 +507,10 @@ func buildProxyConfig(serverURL string) map[string]any {
 	fmt.Println("\nAdd routes. Enter empty token when done.")
 	fmt.Println()
 	for {
-		token := prompt("API token (from certpost admin panel)", "")
+		domain, token := promptTokenDomain(serverURL)
 		if token == "" {
 			break
 		}
-
-		domain := client.ResolveTokenDomain(serverURL, token)
-		if domain != "" {
-			fmt.Printf("  Domain: %s\n", domain)
-		} else {
-			domain = prompt("  Could not look up domain. Enter it manually", "")
-			if domain == "" {
-				continue
-			}
-		}
-
 		backend := ""
 		for backend == "" {
 			backend = prompt(fmt.Sprintf("  Backend address for %s (e.g. 127.0.0.1:8080)", domain), "")
@@ -479,22 +548,27 @@ func validateConfig(serverURL string, config map[string]any, mode string) {
 		for domain, routeRaw := range routes {
 			route, _ := routeRaw.(map[string]any)
 			token, _ := route["token"].(string)
-			if validateToken(serverURL, token, domain) {
-				fmt.Printf("  %s: OK\n", domain)
-			} else {
-				fmt.Printf("  %s: WARNING — token could not fetch cert (domain may not be issued yet)\n", domain)
-			}
+			reportValidate(serverURL, token, domain)
+		}
+	} else if domains, ok := config["domains"].(map[string]any); ok {
+		for domain, tRaw := range domains {
+			token, _ := tRaw.(string)
+			reportValidate(serverURL, token, domain)
 		}
 	} else {
 		domain, _ := config["domain"].(string)
 		token, _ := config["token"].(string)
 		if domain != "" && token != "" {
-			if validateToken(serverURL, token, domain) {
-				fmt.Printf("  %s: OK\n", domain)
-			} else {
-				fmt.Printf("  %s: WARNING — token could not fetch cert (domain may not be issued yet)\n", domain)
-			}
+			reportValidate(serverURL, token, domain)
 		}
+	}
+}
+
+func reportValidate(serverURL, token, domain string) {
+	if validateToken(serverURL, token, domain) {
+		fmt.Printf("  %s: OK\n", domain)
+	} else {
+		fmt.Printf("  %s: WARNING — token could not fetch cert (domain may not be issued yet)\n", domain)
 	}
 }
 
@@ -504,6 +578,117 @@ func validateToken(serverURL, token, domain string) bool {
 	}
 	_, err := client.FetchCert(serverURL, token, domain)
 	return err == nil
+}
+
+const sampleFetchSingle = `{
+  "server": "http://certpost.example.com:8443",
+  "domain": "app.example.com",
+  "token": "your-api-token",
+  "output_dir": "/etc/ssl/certs",
+  "refresh_hours": 24
+}
+`
+
+const sampleFetchMulti = `{
+  "server": "http://certpost.example.com:8443",
+  "output_dir": "/etc/ssl/certs",
+  "refresh_hours": 24,
+  "domains": {
+    "app.example.com": "token-for-app",
+    "api.example.com": "token-for-api"
+  }
+}
+`
+
+const sampleProxy = `{
+  "server": "http://certpost.example.com:8443",
+  "listen": "0.0.0.0:443",
+  "refresh_hours": 24,
+  "routes": {
+    "app.example.com": {
+      "token": "token-for-app",
+      "backend": "127.0.0.1:8080"
+    },
+    "api.example.com": {
+      "token": "token-for-api",
+      "backend": "127.0.0.1:9090"
+    }
+  }
+}
+`
+
+func sampleConfigHelp() {
+	h := colour.Heading
+	o := colour.LongOpt
+	l := colour.Label
+	r := colour.Reset
+	fmt.Fprintf(os.Stdout, `%susage:%s certpost sample-config %sKIND%s [%s--output%s %sFILE%s]
+
+Print an example config file to stdout (or write to a file). When --output is
+used, certpost refuses to overwrite an existing file.
+
+%skinds:%s
+  fetch         Single-domain fetch config
+  fetch-multi   Multi-domain fetch config (uses "domains" map)
+  proxy         TLS termination proxy config
+
+%soptions:%s
+  %s--output%s, -o %sFILE%s   Write to FILE instead of stdout
+`,
+		h, r, l, r, o, r, l, r,
+		h, r,
+		h, r,
+		o, r, l, r,
+	)
+}
+
+func sampleConfigCmd() int {
+	fs := flag.NewFlagSet("sample-config", flag.ContinueOnError)
+	fs.Usage = sampleConfigHelp
+	output := fs.String("o", "", "")
+	fs.StringVar(output, "output", "", "")
+
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 1
+	}
+
+	args := fs.Args()
+	if len(args) != 1 {
+		sampleConfigHelp()
+		return 1
+	}
+
+	var sample string
+	switch args[0] {
+	case "fetch":
+		sample = sampleFetchSingle
+	case "fetch-multi":
+		sample = sampleFetchMulti
+	case "proxy":
+		sample = sampleProxy
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown kind: %s (expected fetch, fetch-multi, or proxy)\n", args[0])
+		return 1
+	}
+
+	if *output == "" {
+		fmt.Print(sample)
+		return 0
+	}
+
+	if _, err := os.Stat(*output); err == nil {
+		fmt.Fprintf(os.Stderr, "Error: %s already exists\n", *output)
+		return 1
+	}
+	if err := os.WriteFile(*output, []byte(sample), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "Wrote sample %s config to %s\n", args[0], *output)
+	return 0
 }
 
 func loadConfig(path string) (map[string]any, error) {
