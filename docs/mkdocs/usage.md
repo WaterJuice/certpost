@@ -103,7 +103,7 @@ Open `http://localhost:8443` and log in with your admin key (printed on server s
 - Issue a Let's Encrypt certificate via DNS-01 challenge
 - Generate a per-domain API token
 
-Domains are listed alphabetically as thin rows showing status and expiry. Click a row to expand it and see:
+Domains are listed as thin rows showing status and expiry, sorted by name by default. Sort toggles at the top let you switch between **Name** and **Expires** — click again to reverse direction; the active sort shows ▲ / ▼. A text filter narrows the list by case-insensitive substring match on the subdomain — press Esc or click the × inside the filter input to clear it. Sort and filter persist alongside the export preferences. Click a row to expand it and see:
 
 - Target — IP address or CNAME (editable)
 - Certificate expiry date
@@ -113,7 +113,7 @@ Domains are listed alphabetically as thin rows showing status and expiry. Click 
 
 #### Bulk export
 
-Each row has a checkbox. Once one or more domains are ticked, a bulk-action bar appears with an **Export…** button that opens a modal. Pick a format:
+Each row has a checkbox. Once one or more domains are ticked, a bulk-action bar appears with an **Export…** button that opens a modal. The "Select all" checkbox operates on whatever is currently visible in the list — combine with the filter to narrow your selection, then export. Pick a format:
 
 | Format        | Output                                                   |
 |---------------|----------------------------------------------------------|
