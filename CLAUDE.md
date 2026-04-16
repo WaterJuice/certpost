@@ -91,7 +91,7 @@ Server features:
 - Info endpoints: `/api/version`, `/api/spec` (OpenAPI 3.0), `/api/help` (plain text)
 - `/api/token-info` — resolves a bearer token to its domain
 - `/api/prefs` (GET/POST, admin-only) — persists admin-panel UI preferences in `prefs.json`; POST body keys are validated against an allowlist
-- Admin panel Domains tab: alphabetical list of thin collapsible rows, multi-select with bulk Export modal (fetch JSON, proxy JSON, CLI commands, or CSV); remembers chosen format and server URL via `/api/prefs`
+- Admin panel Domains tab: thin collapsible rows with sort toggles (Name / Expires, ascending or descending) and a substring filter input (Esc / × to clear). Multi-select with bulk Export modal (fetch JSON, proxy JSON, CLI commands, or CSV); "Select all" scopes to the visible/filtered set. Remembers chosen sort, format, and server URL via `/api/prefs`. All user-supplied values are HTML-escaped before rendering.
 
 ### DNS Provider
 

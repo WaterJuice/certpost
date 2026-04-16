@@ -259,6 +259,8 @@ func (s *Server) handleGetPrefs(w http.ResponseWriter, r *http.Request) {
 var allowedPrefKeys = map[string]bool{
 	"export_format": true,
 	"export_server": true,
+	"sort_by":       true,
+	"sort_dir":      true,
 }
 
 func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {

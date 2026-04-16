@@ -102,6 +102,8 @@
             color: var(--text-muted);
             font-size: 12px;
             white-space: nowrap;
+            min-width: 140px;
+            text-align: right;
         }
 
         .domain-row-head .chevron {
@@ -182,6 +184,8 @@
             border-radius: 12px;
             font-size: 12px;
             font-weight: 500;
+            min-width: 60px;
+            text-align: center;
         }
 
         .badge-issued { background: rgba(63, 185, 80, 0.15); color: var(--green); }
@@ -408,6 +412,60 @@
         }
 
         .list-toolbar input[type=checkbox] { width: auto; accent-color: var(--accent); }
+        .list-toolbar .list-count { font-size: 12px; color: var(--text-muted); }
+
+        .sort-controls {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .sort-controls .sort-label { margin-right: 4px; }
+
+        .sort-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .sort-btn:hover { color: var(--text); background: var(--bg-tertiary); }
+        .sort-btn.active { color: var(--accent); }
+
+        .filter-wrap {
+            position: relative;
+            flex: 1;
+            max-width: 260px;
+            margin: 0 12px;
+        }
+
+        .filter-wrap input[type=text] {
+            padding: 4px 26px 4px 10px;
+            font-size: 13px;
+        }
+
+        .filter-clear {
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 16px;
+            line-height: 1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .filter-clear:hover { color: var(--text); background: var(--bg-tertiary); }
+        #filter-input:placeholder-shown ~ .filter-clear { display: none; }
 
         /* Modal */
         .modal-overlay {
@@ -583,7 +641,19 @@
             <!-- List toolbar -->
             <div id="list-toolbar" class="list-toolbar" style="display: none;">
                 <label><input type="checkbox" id="select-all" onclick="toggleSelectAll(this.checked)"> Select all</label>
-                <span id="list-count" style="font-size: 12px; color: var(--text-muted);"></span>
+                <div class="filter-wrap">
+                    <input type="text" id="filter-input" placeholder="Filter…"
+                           oninput="onFilterChange(this.value)"
+                           onkeydown="if(event.key==='Escape')clearFilter()">
+                    <button type="button" class="filter-clear" onclick="clearFilter()"
+                            title="Clear filter (Esc)" aria-label="Clear filter">×</button>
+                </div>
+                <div class="sort-controls">
+                    <span class="sort-label">Sort:</span>
+                    <button type="button" class="sort-btn" data-sort="subdomain" onclick="onSortClick('subdomain')">Name</button>
+                    <button type="button" class="sort-btn" data-sort="expires" onclick="onSortClick('expires')">Expires</button>
+                </div>
+                <span id="list-count" class="list-count"></span>
             </div>
 
             <!-- Domain list -->
@@ -700,6 +770,29 @@
             return res.json();
         }
 
+        // HTML-escape for use as element text or attribute value.
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;');
+        }
+
+        // Escape for use inside onclick="fn('${jsArg(s)}')" — handles both
+        // the JS-string layer (backslash, quote) and the HTML-attribute
+        // layer (&, <, >, ", ').
+        function jsArg(s) {
+            return String(s == null ? '' : s)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
         function formatDate(ts) {
             if (!ts) return '\u2014';
             const d = typeof ts === 'string' ? new Date(ts) : new Date(ts * 1000);
@@ -734,32 +827,99 @@
         const _expanded = new Set();
         const _revealedTokens = new Set();
         let _domainsCache = [];
+        let _filter = '';
+        let _sortBy = 'subdomain';   // 'subdomain' | 'expires'
+        let _sortDir = 'asc';        // 'asc' | 'desc'
         let _lastRenderKey = '';
+
+        function onSortClick(by) {
+            if (_sortBy === by) {
+                _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _sortBy = by;
+                _sortDir = 'asc';
+            }
+            savePrefs({ sort_by: _sortBy, sort_dir: _sortDir });
+            renderDomains();
+        }
+
+        function sortedDomains() {
+            const sign = _sortDir === 'asc' ? 1 : -1;
+            const list = _domainsCache.slice();
+            list.sort((a, b) => {
+                if (_sortBy === 'expires') {
+                    // Domains without an expiry sort to the bottom regardless of direction.
+                    const aT = a.cert_expires_at ? Date.parse(a.cert_expires_at) : null;
+                    const bT = b.cert_expires_at ? Date.parse(b.cert_expires_at) : null;
+                    if (aT === null && bT === null) return a.subdomain.localeCompare(b.subdomain);
+                    if (aT === null) return 1;
+                    if (bT === null) return -1;
+                    if (aT !== bT) return sign * (aT - bT);
+                    return a.subdomain.localeCompare(b.subdomain);
+                }
+                return sign * a.subdomain.localeCompare(b.subdomain);
+            });
+            return list;
+        }
+
+        function onFilterChange(value) {
+            _filter = value.trim().toLowerCase();
+            renderDomains();
+        }
+
+        function clearFilter() {
+            const input = document.getElementById('filter-input');
+            input.value = '';
+            onFilterChange('');
+        }
+
+        function visibleDomains() {
+            const sorted = sortedDomains();
+            if (!_filter) return sorted;
+            return sorted.filter(d => d.subdomain.toLowerCase().includes(_filter));
+        }
+
+        function renderSortControls() {
+            const arrow = _sortDir === 'asc' ? ' ▲' : ' ▼';
+            document.querySelectorAll('.sort-btn').forEach(btn => {
+                const by = btn.getAttribute('data-sort');
+                const isActive = by === _sortBy;
+                btn.classList.toggle('active', isActive);
+                btn.textContent = (by === 'subdomain' ? 'Name' : 'Expires') + (isActive ? arrow : '');
+            });
+        }
+
+        function syncSelectAll() {
+            const visible = visibleDomains();
+            document.getElementById('select-all').checked =
+                visible.length > 0 && visible.every(d => _selected.has(d.subdomain));
+        }
 
         async function loadDomains() {
             const data = await api('GET', '/api/domains');
-            _domainsCache = (data.domains || []).slice().sort((a, b) =>
-                a.subdomain.localeCompare(b.subdomain));
+            _domainsCache = data.domains || [];
             const existing = new Set(_domainsCache.map(d => d.subdomain));
             for (const s of Array.from(_selected)) if (!existing.has(s)) _selected.delete(s);
             renderDomains();
         }
 
         function renderDomains() {
-            const list = _domainsCache;
             const container = document.getElementById('domains-list');
             const toolbar = document.getElementById('list-toolbar');
+            const visible = visibleDomains();
 
             const key = JSON.stringify([
-                list.map(d => [d.subdomain, d.status, d.target, d.last_error, d.cert_expires_at, d.api_token]),
+                _domainsCache.map(d => [d.subdomain, d.status, d.target, d.last_error, d.cert_expires_at, d.api_token]),
                 Array.from(_selected).sort(),
                 Array.from(_expanded).sort(),
                 Array.from(_revealedTokens).sort(),
+                _filter, _sortBy, _sortDir,
             ]);
             if (key === _lastRenderKey) return;
             _lastRenderKey = key;
+            renderSortControls();
 
-            if (list.length === 0) {
+            if (_domainsCache.length === 0) {
                 container.innerHTML = '<div class="empty-state">No domains configured yet.</div>';
                 toolbar.style.display = 'none';
                 updateBulkBar();
@@ -767,24 +927,37 @@
             }
 
             toolbar.style.display = '';
-            document.getElementById('list-count').textContent = `${list.length} domain${list.length === 1 ? '' : 's'}`;
+            const total = _domainsCache.length;
+            document.getElementById('list-count').textContent = _filter
+                ? `${visible.length} of ${total} matching`
+                : `${total} domain${total === 1 ? '' : 's'}`;
 
-            container.innerHTML = list.map(d => {
+            if (visible.length === 0) {
+                container.innerHTML = `<div class="empty-state">No domains match "${esc(_filter)}".</div>`;
+                syncSelectAll();
+                updateBulkBar();
+                return;
+            }
+
+            container.innerHTML = visible.map(d => {
                 const enc = encodeURIComponent(d.subdomain);
+                const subArg = jsArg(d.subdomain);
+                const tokenArg = jsArg(d.api_token || '');
                 const sel = _selected.has(d.subdomain) ? 'checked' : '';
                 const exp = _expanded.has(d.subdomain) ? 'expanded' : '';
-                const hasError = d.last_error ? `<div class="error-text">${d.last_error}</div>` : '';
+                const hasError = d.last_error ? `<div class="error-text">${esc(d.last_error)}</div>` : '';
                 const downloadBtn = d.status === 'issued'
-                    ? `<button class="btn btn-secondary btn-sm" onclick="downloadCert('${d.subdomain}', '${d.api_token}')">Download</button>`
+                    ? `<button class="btn btn-secondary btn-sm" onclick="downloadCert('${subArg}', '${tokenArg}')">Download</button>`
                     : '';
-                const expires = d.cert_expires_at ? 'expires ' + formatDate(d.cert_expires_at) : '';
+                const expires = d.cert_expires_at ? 'expires ' + esc(formatDate(d.cert_expires_at)) : '';
+                const statusClass = String(d.status || '').replace(/[^a-z]/gi, '');
 
                 return `
                 <div class="domain-row ${exp}" id="row-${enc}">
-                    <div class="domain-row-head" onclick="toggleExpand(event, '${d.subdomain}')">
-                        <input type="checkbox" ${sel} onclick="event.stopPropagation(); toggleSelect('${d.subdomain}', this.checked)">
-                        <span class="domain-name-inline">${d.subdomain}</span>
-                        <span class="badge badge-${d.status}">${d.status}</span>
+                    <div class="domain-row-head" onclick="toggleExpand(event, '${subArg}')">
+                        <input type="checkbox" ${sel} onclick="event.stopPropagation(); toggleSelect('${subArg}', this.checked)">
+                        <span class="domain-name-inline">${esc(d.subdomain)}</span>
+                        <span class="badge badge-${statusClass}">${esc(d.status)}</span>
                         <span class="expires">${expires}</span>
                         <span class="chevron">▸</span>
                     </div>
@@ -794,33 +967,32 @@
                             <div class="meta-item">
                                 <label>Target</label>
                                 <div class="value inline-edit">
-                                    ${d.target || '\u2014'}
-                                    <button class="btn btn-secondary btn-sm" onclick="editTarget('${d.subdomain}')">Edit</button>
+                                    ${d.target ? esc(d.target) : '\u2014'}
+                                    <button class="btn btn-secondary btn-sm" onclick="editTarget('${subArg}')">Edit</button>
                                 </div>
                             </div>
                             <div class="meta-item">
                                 <label>Expires</label>
-                                <div class="value">${formatDate(d.cert_expires_at)}</div>
+                                <div class="value">${esc(formatDate(d.cert_expires_at))}</div>
                             </div>
                         </div>
                         <div class="token-row">
-                            <code id="token-${enc}">${d.api_token ? (_revealedTokens.has(enc) ? d.api_token : maskToken(d.api_token)) : '\u2014'}</code>
+                            <code id="token-${enc}">${d.api_token ? esc(_revealedTokens.has(enc) ? d.api_token : maskToken(d.api_token)) : '\u2014'}</code>
                             <div class="token-actions">
-                                <button class="btn btn-secondary btn-sm" id="reveal-${enc}" onclick="toggleToken('${enc}', '${d.api_token}')">${_revealedTokens.has(enc) ? 'Hide' : 'Show'}</button>
-                                <button class="btn btn-secondary btn-sm" onclick="copyToken('${d.api_token}')">Copy</button>
-                                <button class="btn btn-secondary btn-sm" onclick="rotateToken('${d.subdomain}')">Rotate</button>
+                                <button class="btn btn-secondary btn-sm" id="reveal-${enc}" onclick="toggleToken('${enc}', '${tokenArg}')">${_revealedTokens.has(enc) ? 'Hide' : 'Show'}</button>
+                                <button class="btn btn-secondary btn-sm" onclick="copyToken('${tokenArg}')">Copy</button>
+                                <button class="btn btn-secondary btn-sm" onclick="rotateToken('${subArg}')">Rotate</button>
                             </div>
                         </div>
                         <div class="domain-actions">
                             ${downloadBtn}
-                            <button class="btn btn-danger btn-sm" onclick="removeDomain('${d.subdomain}')">Remove</button>
+                            <button class="btn btn-danger btn-sm" onclick="removeDomain('${subArg}')">Remove</button>
                         </div>
                     </div>
                 </div>`;
             }).join('');
 
-            const selAll = document.getElementById('select-all');
-            selAll.checked = list.length > 0 && list.every(d => _selected.has(d.subdomain));
+            syncSelectAll();
             updateBulkBar();
         }
 
@@ -839,14 +1011,17 @@
 
         function toggleSelect(subdomain, checked) {
             if (checked) _selected.add(subdomain); else _selected.delete(subdomain);
-            const selAll = document.getElementById('select-all');
-            selAll.checked = _domainsCache.length > 0 && _domainsCache.every(d => _selected.has(d.subdomain));
+            syncSelectAll();
             updateBulkBar();
         }
 
         function toggleSelectAll(checked) {
-            _selected.clear();
-            if (checked) _domainsCache.forEach(d => _selected.add(d.subdomain));
+            const visible = visibleDomains();
+            if (checked) {
+                visible.forEach(d => _selected.add(d.subdomain));
+            } else {
+                visible.forEach(d => _selected.delete(d.subdomain));
+            }
             renderDomains();
         }
 
@@ -866,6 +1041,8 @@
         let _prefs = {};
         async function loadPrefs() {
             _prefs = await api('GET', '/api/prefs') || {};
+            if (_prefs.sort_by === 'subdomain' || _prefs.sort_by === 'expires') _sortBy = _prefs.sort_by;
+            if (_prefs.sort_dir === 'asc' || _prefs.sort_dir === 'desc') _sortDir = _prefs.sort_dir;
         }
 
         async function openExportModal() {
