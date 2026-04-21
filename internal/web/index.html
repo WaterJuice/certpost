@@ -825,7 +825,6 @@
         // Domains
         const _selected = new Set();
         const _expanded = new Set();
-        const _revealedTokens = new Set();
         let _domainsCache = [];
         let _filter = '';
         let _sortBy = 'subdomain';   // 'subdomain' | 'expires'
@@ -912,7 +911,6 @@
                 _domainsCache.map(d => [d.subdomain, d.status, d.target, d.last_error, d.cert_expires_at, d.api_token]),
                 Array.from(_selected).sort(),
                 Array.from(_expanded).sort(),
-                Array.from(_revealedTokens).sort(),
                 _filter, _sortBy, _sortDir,
             ]);
             if (key === _lastRenderKey) return;
@@ -977,9 +975,8 @@
                             </div>
                         </div>
                         <div class="token-row">
-                            <code id="token-${enc}">${d.api_token ? esc(_revealedTokens.has(enc) ? d.api_token : maskToken(d.api_token)) : '\u2014'}</code>
+                            <code id="token-${enc}">${d.api_token ? esc(d.api_token) : '\u2014'}</code>
                             <div class="token-actions">
-                                <button class="btn btn-secondary btn-sm" id="reveal-${enc}" onclick="toggleToken('${enc}', '${tokenArg}')">${_revealedTokens.has(enc) ? 'Hide' : 'Show'}</button>
                                 <button class="btn btn-secondary btn-sm" onclick="copyToken('${tokenArg}')">Copy</button>
                                 <button class="btn btn-secondary btn-sm" onclick="rotateToken('${subArg}')">Rotate</button>
                             </div>
@@ -1222,25 +1219,6 @@
             if (!confirm('Rotate API token for ' + subdomain + '?\nExisting clients will need the new token.')) return;
             await api('POST', '/api/domains/' + encodeURIComponent(subdomain) + '/rotate');
             loadDomains();
-        }
-
-        function maskToken(token) {
-            const show = 4;
-            return token.slice(0, show) + '*'.repeat(token.length - show);
-        }
-
-        function toggleToken(enc, token) {
-            const el = document.getElementById('token-' + enc);
-            const btn = document.getElementById('reveal-' + enc);
-            if (btn.textContent === 'Show') {
-                el.textContent = token;
-                btn.textContent = 'Hide';
-                _revealedTokens.add(enc);
-            } else {
-                el.textContent = maskToken(token);
-                btn.textContent = 'Show';
-                _revealedTokens.delete(enc);
-            }
         }
 
         async function copyToken(token) {

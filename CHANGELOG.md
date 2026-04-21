@@ -1,3 +1,7 @@
+# certpost 1.0.0 Beta 14 - 21 Apr 2026
+
+- Admin panel Domains tab now shows API tokens in full — removed the Show/Hide toggle and token masking
+
 # certpost 1.0.0 Beta 13 - 16 Apr 2026
 
 - `certpost fetch` now supports fetching multiple certificates per cycle via a `domains` map in the config file (existing single-domain configs continue to work unchanged)
