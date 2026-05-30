@@ -52,7 +52,7 @@ build: check go-build docs
 # Publish (requires output/ from make build)
 .PHONY: publish
 publish:
-	uv run cal-publish-python --set-latest output/
+	uv run wj-publish output/
 
 # Generate CLI help files for documentation
 .PHONY: docs-help
@@ -67,7 +67,7 @@ docs: docs-help
 	rm -rf html/
 	uv --version 2>/dev/null && true || pip3 install uv
 	uv sync
-	VERSION=$(VERSION_STR) uv run cal-mkdocs -f docs/mkdocs.yml -d docs/mkdocs -o html/
+	VERSION=$(VERSION_STR) uv run wj-mkdocs -f docs/mkdocs.yml -d docs/mkdocs -o html/
 	cp docs/docinfo.* html/
 	rm -rf docs/mkdocs/_include html/_include
 
