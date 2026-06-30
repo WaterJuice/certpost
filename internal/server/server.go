@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -30,18 +31,31 @@ import (
 	"github.com/WaterJuice/certpost/internal/acme"
 	"github.com/WaterJuice/certpost/internal/dns"
 	"github.com/WaterJuice/certpost/internal/logbuf"
+	"github.com/WaterJuice/certpost/internal/oidcauth"
 	"github.com/WaterJuice/certpost/internal/renewal"
 	"github.com/WaterJuice/certpost/internal/storage"
 	"github.com/WaterJuice/certpost/internal/version"
 	"github.com/WaterJuice/certpost/internal/web"
 )
 
+const (
+	// sessionCookie is the admin-key session cookie; its value is a SHA-256
+	// hash of the admin key.
+	sessionCookie = "certpost_session"
+	// oidcCookie is the OIDC session cookie; its value is an opaque session id
+	// resolved via oidcauth (distinct from the admin-key cookie).
+	oidcCookie = "certpost_oidc"
+)
+
 // Server holds all server state.
 type Server struct {
-	storage    *storage.Storage
-	acmeClient *acme.Client
-	dnsRecords dns.Provider
-	cancelFunc context.CancelFunc
+	storage         *storage.Storage
+	acmeClient      *acme.Client
+	dnsRecords      dns.Provider
+	cancelFunc      context.CancelFunc
+	adminKeyEnabled bool           // whether an admin-key login is configured
+	oidc            *oidcauth.Auth // OIDC login, or nil when not configured
+	oidcLabel       string         // provider name on the login button
 }
 
 // Run starts the certpost HTTP server.
@@ -65,7 +79,21 @@ func RunWithOptions(host string, port int, dataDir string, demo bool) error {
 	}
 
 	adminKey, _ := config["admin_key"].(string)
-	fmt.Fprintf(os.Stderr, "  Admin key: %s\n", adminKey)
+
+	// Authentication is either an admin key or OIDC — never both. config.json
+	// may carry an "oidc" block as an alternative to "admin_key".
+	oidcAuth, oidcLabel, err := buildOIDC(config, adminKey)
+	if err != nil {
+		return fmt.Errorf("oidc config: %w", err)
+	}
+
+	if oidcAuth != nil {
+		fmt.Fprintf(os.Stderr, "  Auth: OIDC (%s)\n", oidcLabel)
+	} else if adminKey != "" {
+		fmt.Fprintf(os.Stderr, "  Admin key: %s\n", adminKey)
+	} else {
+		fmt.Fprintln(os.Stderr, "  Auth: none — admin panel is open")
+	}
 	if demo {
 		fmt.Fprintln(os.Stderr, "  Demo mode: DNS calls and ACME renewal are disabled")
 	}
@@ -117,10 +145,13 @@ func RunWithOptions(host string, port int, dataDir string, demo bool) error {
 	}
 
 	srv := &Server{
-		storage:    s,
-		acmeClient: acmeClient,
-		dnsRecords: dnsRecords,
-		cancelFunc: cancel,
+		storage:         s,
+		acmeClient:      acmeClient,
+		dnsRecords:      dnsRecords,
+		cancelFunc:      cancel,
+		adminKeyEnabled: adminKey != "",
+		oidc:            oidcAuth,
+		oidcLabel:       oidcLabel,
 	}
 
 	mux := http.NewServeMux()
@@ -137,6 +168,16 @@ func RunWithOptions(host string, port int, dataDir string, demo bool) error {
 
 	// Admin routes
 	mux.HandleFunc("POST /api/auth/login", srv.handleLogin)
+	mux.HandleFunc("POST /api/auth/logout", srv.handleLogout)
+
+	// OIDC routes (registered only when OIDC login is configured)
+	if oidcAuth != nil {
+		mux.HandleFunc("GET /oauth/login", srv.handleOIDCLogin)
+		// The callback is served at the redirect URL's path so it byte-matches
+		// the value registered with the provider.
+		logbuf.Log("server", fmt.Sprintf("OIDC callback registered at %s", oidcAuth.CallbackPath()))
+		mux.HandleFunc("GET "+oidcAuth.CallbackPath(), srv.handleOIDCCallback)
+	}
 	mux.HandleFunc("GET /api/domains", srv.requireAdmin(srv.handleGetDomains))
 	mux.HandleFunc("GET /api/base-domain", srv.requireAdmin(srv.handleGetBaseDomain))
 	mux.HandleFunc("GET /api/logs", srv.requireAdmin(srv.handleGetLogs))
@@ -172,12 +213,33 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// isAdminAuthenticated reports whether r carries a valid admin session. When no
+// login is configured (neither admin key nor OIDC) the panel is open and every
+// request is treated as authenticated; otherwise either a valid admin-key
+// cookie or a valid OIDC session is accepted.
 func (s *Server) isAdminAuthenticated(r *http.Request) bool {
-	cookie, err := r.Cookie("certpost_session")
-	if err != nil {
-		return false
+	if !s.adminKeyEnabled && s.oidc == nil {
+		return true
 	}
-	return s.storage.VerifyAdminCookie(cookie.Value)
+	if s.adminKeyEnabled {
+		if cookie, err := r.Cookie(sessionCookie); err == nil && s.storage.VerifyAdminCookie(cookie.Value) {
+			return true
+		}
+	}
+	_, ok := s.oidcSession(r)
+	return ok
+}
+
+// oidcSession resolves the OIDC session carried by r, if any.
+func (s *Server) oidcSession(r *http.Request) (oidcauth.Session, bool) {
+	if s.oidc == nil {
+		return oidcauth.Session{}, false
+	}
+	cookie, err := r.Cookie(oidcCookie)
+	if err != nil {
+		return oidcauth.Session{}, false
+	}
+	return s.oidc.SessionFor(cookie.Value)
 }
 
 // --- Admin panel ---
@@ -196,6 +258,11 @@ func (s *Server) handleAdminPanel(w http.ResponseWriter, r *http.Request) {
 // --- Auth handlers ---
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.adminKeyEnabled {
+		sendError(w, 400, "Admin key login is not enabled")
+		return
+	}
+
 	body, err := readBody(r)
 	if err != nil {
 		sendError(w, 400, "Invalid JSON")
@@ -209,18 +276,154 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	remember, _ := body["remember"].(bool)
-	cookieValue := s.storage.AdminCookieValue()
-
-	cookie := fmt.Sprintf("certpost_session=%s; Path=/; HttpOnly; SameSite=Strict", cookieValue)
+	maxAge := 0 // session cookie unless "remember me" is ticked
 	if remember {
-		cookie += "; Max-Age=2592000"
+		maxAge = 2592000
 	}
-	w.Header().Set("Set-Cookie", cookie)
+	setSessionCookie(w, sessionCookie, s.storage.AdminCookieValue(), maxAge, http.SameSiteStrictMode, false)
+	sendJSON(w, 200, map[string]string{"status": "ok"})
+}
+
+// handleLogout clears both possible session cookies and, for OIDC, forgets the
+// server-side session. Clearing an unset cookie is a harmless no-op.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if s.oidc != nil {
+		if cookie, err := r.Cookie(oidcCookie); err == nil {
+			s.oidc.EndSession(cookie.Value)
+		}
+	}
+	setSessionCookie(w, sessionCookie, "", -1, http.SameSiteStrictMode, false)
+	setSessionCookie(w, oidcCookie, "", -1, http.SameSiteLaxMode, false)
 	sendJSON(w, 200, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
-	sendJSON(w, 200, map[string]bool{"authenticated": s.isAdminAuthenticated(r)})
+	username := ""
+	if sess, ok := s.oidcSession(r); ok {
+		username = sess.Username
+	}
+	sendJSON(w, 200, map[string]any{
+		"authenticated":     s.isAdminAuthenticated(r),
+		"admin_key_enabled": s.adminKeyEnabled,
+		"oidc_enabled":      s.oidc != nil,
+		"oidc_label":        s.oidcLabel,
+		"username":          username,
+	})
+}
+
+// handleOIDCLogin starts the OIDC flow by redirecting the browser to the
+// provider's authorise endpoint.
+func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
+	if s.oidc == nil {
+		http.NotFound(w, r)
+		return
+	}
+	loginURL, err := s.oidc.LoginURL(r.Context())
+	if err != nil {
+		logbuf.Log("server", fmt.Sprintf("OIDC login URL failed: %v", err))
+		http.Redirect(w, r, "/?oidc_error="+url.QueryEscape("Login is temporarily unavailable. Please try again."), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, loginURL, http.StatusSeeOther)
+}
+
+// handleOIDCCallback completes the OIDC flow: it validates the callback,
+// establishes a session, sets the session cookie, and redirects back to the
+// admin panel. Failures redirect to the panel with an ?oidc_error message.
+func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	if s.oidc == nil {
+		http.NotFound(w, r)
+		return
+	}
+	q := r.URL.Query()
+	sess, err := s.oidc.Complete(r.Context(), q.Get("code"), q.Get("state"))
+	if err != nil {
+		logbuf.Log("server", fmt.Sprintf("OIDC login rejected: %v", err))
+		http.Redirect(w, r, "/?oidc_error="+url.QueryEscape(oidcErrorMessage(err)), http.StatusSeeOther)
+		return
+	}
+	sid := s.oidc.StartSession(sess)
+	const oneYear = 365 * 24 * 60 * 60
+	setSessionCookie(w, oidcCookie, sid, oneYear, http.SameSiteLaxMode, s.oidc.RedirectIsHTTPS())
+	logbuf.Log("server", fmt.Sprintf("OIDC login: %s", sess.Username))
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// oidcErrorMessage maps an oidcauth.Complete failure to a user-facing message,
+// distinguishing a genuine authorisation denial from an expired round-trip or
+// a provider being unreachable.
+func oidcErrorMessage(cause error) string {
+	switch {
+	case errors.Is(cause, oidcauth.ErrForbidden):
+		return "Your account is not permitted to access this panel."
+	case errors.Is(cause, oidcauth.ErrInvalidState):
+		return "Your login session expired. Please try again."
+	default:
+		return "Login failed. Please try again."
+	}
+}
+
+// buildOIDC parses and validates the optional "oidc" block from config. It
+// returns nil when no OIDC block is present. An OIDC block and a non-empty
+// admin key are mutually exclusive.
+func buildOIDC(config map[string]any, adminKey string) (*oidcauth.Auth, string, error) {
+	raw, ok := config["oidc"].(map[string]any)
+	if !ok || raw == nil {
+		return nil, "", nil
+	}
+	if adminKey != "" {
+		return nil, "", errors.New("admin_key and oidc are mutually exclusive")
+	}
+
+	issuer, _ := raw["issuer"].(string)
+	clientID, _ := raw["client_id"].(string)
+	clientSecret, _ := raw["client_secret"].(string)
+	redirectURL, _ := raw["redirect_url"].(string)
+	label, _ := raw["label"].(string)
+
+	var users []string
+	if arr, ok := raw["authorised_users"].([]any); ok {
+		for _, u := range arr {
+			if str, ok := u.(string); ok && str != "" {
+				users = append(users, str)
+			}
+		}
+	}
+
+	switch {
+	case issuer == "":
+		return nil, "", errors.New("oidc.issuer is required")
+	case clientID == "":
+		return nil, "", errors.New("oidc.client_id is required")
+	case clientSecret == "":
+		return nil, "", errors.New("oidc.client_secret is required")
+	case redirectURL == "":
+		return nil, "", errors.New("oidc.redirect_url is required")
+	case len(users) == 0:
+		return nil, "", errors.New("oidc.authorised_users must list at least one user")
+	}
+
+	// The callback is served at the redirect URL's path, so it must be a
+	// dedicated path (e.g. /auth-callback). An empty or root path would collide
+	// with the admin panel's own routes and panic the router.
+	if u, err := url.Parse(redirectURL); err != nil {
+		return nil, "", fmt.Errorf("oidc.redirect_url is not a valid URL: %w", err)
+	} else if u.Path == "" || u.Path == "/" {
+		return nil, "", errors.New("oidc.redirect_url must include a dedicated path, e.g. /auth-callback")
+	}
+
+	if label = strings.TrimSpace(label); label == "" {
+		label = "SSO"
+	}
+
+	auth := oidcauth.New(oidcauth.Config{
+		Issuer:          issuer,
+		ClientID:        clientID,
+		ClientSecret:    clientSecret,
+		RedirectURI:     redirectURL,
+		AuthorisedUsers: users,
+	})
+	return auth, label, nil
 }
 
 // --- Domain handlers ---
@@ -520,6 +723,21 @@ func readBody(r *http.Request) (map[string]any, error) {
 	}
 	var result map[string]any
 	return result, json.Unmarshal(data, &result)
+}
+
+// setSessionCookie writes (or, with maxAge < 0 and an empty value, clears) a
+// session cookie with the server's standard attributes. maxAge of 0 makes a
+// session cookie (no Max-Age); a negative maxAge deletes it.
+func setSessionCookie(w http.ResponseWriter, name, value string, maxAge int, sameSite http.SameSite, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: sameSite,
+		Secure:   secure,
+	})
 }
 
 func sendJSON(w http.ResponseWriter, code int, data any) {

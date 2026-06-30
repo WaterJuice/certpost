@@ -55,6 +55,8 @@ internal/
 │   └── factory.go        # Provider factory (creates from config)
 ├── acme/
 │   └── client.go         # ACME v2 client (Let's Encrypt)
+├── oidcauth/
+│   └── oidcauth.go       # OpenID Connect login backend (auth-only, PKCE, stdlib)
 ├── colour/
 │   └── colour.go         # ANSI colour helpers (auto-disabled in pipes)
 ├── renewal/
@@ -123,7 +125,7 @@ Four subcommands: `fetch`, `proxy`, `init`, `sample-config`. No command shows he
 ### Storage
 
 - All data in a user-specified directory (`--data-dir`, no default)
-- `config.json` — DNS provider settings, base domain, admin key, bind address, port
+- `config.json` — DNS provider settings, base domain, admin key (or `oidc` block), bind address, port
 - `domains.json` — managed domains with status, target, per-domain API tokens
 - `certs/<domain>/cert.json` — certificate PEM data with ISO timestamps
 - `acme_account.json` — ACME account key and registration URL
@@ -135,6 +137,7 @@ Four subcommands: `fetch`, `proxy`, `init`, `sample-config`. No command shows he
 ### Auth
 
 - Admin panel: login with admin key, cookie set to SHA-256 hash of key (optional "remember me" for persistence)
+- Admin panel alternative: OpenID Connect login (authorisation-code flow + PKCE) via the `internal/oidcauth` package, configured by an `oidc` block in `config.json` (mutually exclusive with `admin_key`). Auth-only — the provider establishes identity (`preferred_username`, falling back to `nickname`), no provider API is called and no token stored. Endpoints discovered from `<issuer>/.well-known/openid-configuration`. Access gated by an `authorised_users` allow-list (403 otherwise). Routes: `GET /oauth/login` (redirect to provider) and `GET <redirect_url path>` (callback). In-memory sessions in a `certpost_oidc` cookie. The SPA reads `/api/auth/check` (`oidc_enabled`, `oidc_label`, `admin_key_enabled`, `username`) to render the right login screen; `POST /api/auth/logout` clears the session.
 - Cert API: per-domain bearer tokens (generated on domain creation, rotatable)
 
 ## Testing Changes
