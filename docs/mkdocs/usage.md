@@ -93,9 +93,66 @@ For split configurations (e.g. Cloudflare for ACME challenges, Technitium for do
 
 Legacy configs with flat `cloudflare_api_token` and `cloudflare_zone_id` keys are automatically migrated on first startup.
 
+### OIDC login
+
+As an alternative to `admin_key`, the admin panel can delegate authentication to
+any OpenID Connect provider (authorisation-code flow with PKCE). The provider is
+used **only to establish identity** — no provider API is called and no token is
+stored. Setting both `admin_key` and `oidc` is a config error: the two modes are
+mutually exclusive.
+
+The authorise/token endpoints are learned from the issuer's OIDC **discovery
+document** (`<issuer>/.well-known/openid-configuration`), fetched on the first
+login and cached. Because every standards-compliant OIDC provider publishes that
+document, the same block works against any of them by pointing `issuer` at the
+provider — only the username claim (`preferred_username`, falling back to
+`nickname`) is assumed.
+
+```json
+{
+  "base_domain": "example.com",
+  "bind": "0.0.0.0",
+  "port": 8443,
+  "dns": {
+    "provider": "cloudflare",
+    "api_token": "your-cloudflare-api-token",
+    "zone_id": "your-zone-id"
+  },
+  "oidc": {
+    "issuer": "https://sso.example.com",
+    "client_id": "…",
+    "client_secret": "…",
+    "redirect_url": "https://certpost.example.com/auth-callback",
+    "authorised_users": ["alice", "bob"],
+    "label": "Company SSO"
+  }
+}
+```
+
+| field | meaning |
+|-------|---------|
+| `oidc.issuer` | OIDC issuer URL (some providers add a path, e.g. a realm); the authorise/token endpoints are discovered from it |
+| `oidc.client_id` / `client_secret` | OAuth client credentials |
+| `oidc.redirect_url` | exact callback URL; its path (a dedicated one, e.g. `/auth-callback`) is where the callback is served |
+| `oidc.authorised_users` | required — allow-list of usernames (`preferred_username`) permitted to log in; everyone else gets a 403 |
+| `oidc.label` | optional — provider name on the login button ("Log in with &lt;label&gt;"); defaults to `SSO` |
+
+**Registering the client.** In your provider's admin console, create a
+confidential client:
+
+- enable **Client authentication** (a confidential client),
+- enable the **Standard flow** (authorisation code),
+- set the **Valid redirect URI** to exactly the `redirect_url` above
+  (e.g. `https://certpost.example.com/auth-callback`).
+
+Copy the client ID and the generated secret into `client_id` / `client_secret`.
+A user the provider authenticates is only admitted when their `preferred_username`
+is in `authorised_users`. Sessions are held in memory, so everyone is logged out
+when the server restarts; they simply log in again.
+
 ### Admin panel
 
-Open `http://localhost:8443` and log in with your admin key (printed on server startup). The admin panel has two tabs:
+Open `http://localhost:8443` and log in with your admin key (printed on server startup) — or, if [OIDC login](#oidc-login) is configured, with the "Log in with &lt;provider&gt;" button. The admin panel has two tabs:
 
 **Domains** — add subdomains with a target (IP address or CNAME hostname). certpost will:
 

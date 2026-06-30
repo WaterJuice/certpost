@@ -347,6 +347,9 @@
 
         .login-error { color: var(--red); font-size: 14px; margin-top: 12px; display: none; }
 
+        .login-lead { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        .login-divider { display: none; }
+
         #admin-screen { display: none; }
 
         .inline-edit {
@@ -572,15 +575,25 @@
         <h1>certpost <span>certificate manager</span> <span id="header-version"></span></h1>
         <div style="display: flex; align-items: center; gap: 16px;">
             <div id="header-domain" style="color: var(--accent); font-size: 15px; font-weight: 500;"></div>
+            <span id="header-user" style="color: var(--text-muted); font-size: 14px;"></span>
             <button id="logout-btn" class="btn btn-secondary btn-sm" onclick="doLogout()" style="display: none;">Logout</button>
         </div>
     </header>
 
     <!-- Login Screen -->
-    <div id="login-screen">
+    <div id="login-screen" style="display: none;">
         <div class="login-box">
             <h2>Admin Login</h2>
-            <form onsubmit="event.preventDefault(); doLogin();" autocomplete="on">
+
+            <!-- OIDC login (shown when web.oidc is configured) -->
+            <div id="login-oidc" style="display: none;">
+                <p class="login-lead">Sign in with your <span id="oidc-label">SSO</span> account to continue.</p>
+                <a id="oidc-login-btn" class="btn btn-primary" href="/oauth/login" style="display: block; text-align: center; width: 100%; box-sizing: border-box;">Log in with <span id="oidc-label-btn">SSO</span></a>
+                <div id="oidc-error" class="login-error"></div>
+            </div>
+
+            <!-- Admin-key login (shown when admin_key is configured) -->
+            <form id="login-form-admin" style="display: none;" onsubmit="event.preventDefault(); doLogin();" autocomplete="on">
                 <input type="hidden" name="username" autocomplete="username" value="admin">
                 <div class="form-group">
                     <label for="login-key">Admin Key</label>
@@ -713,9 +726,50 @@
 
     <script>
         // Auth
+        let authInfo = {};
+
         async function checkAuth() {
-            const res = await api('GET', '/api/auth/check');
-            if (res.authenticated) showAdmin();
+            try {
+                authInfo = await api('GET', '/api/auth/check') || {};
+            } catch {
+                // A transient failure shouldn't leave a blank page — fall back
+                // to the login screen.
+                authInfo = {};
+            }
+            if (authInfo.authenticated) {
+                showAdmin(authInfo.username);
+            } else {
+                showLogin();
+            }
+        }
+
+        // showLogin renders the login screen, choosing the OIDC button or the
+        // admin-key form based on what the server has configured.
+        function showLogin() {
+            document.getElementById('admin-screen').style.display = 'none';
+            const screen = document.getElementById('login-screen');
+            const oidcBox = document.getElementById('login-oidc');
+            const adminForm = document.getElementById('login-form-admin');
+            if (authInfo.oidc_enabled) {
+                const label = authInfo.oidc_label || 'SSO';
+                document.getElementById('oidc-label').textContent = label;
+                document.getElementById('oidc-label-btn').textContent = label;
+                oidcBox.style.display = 'block';
+                adminForm.style.display = 'none';
+                // Surface an error carried back from a failed callback, then
+                // strip it from the URL so it doesn't re-appear on refresh.
+                const err = new URLSearchParams(location.search).get('oidc_error');
+                const errEl = document.getElementById('oidc-error');
+                if (err) {
+                    errEl.textContent = err;
+                    errEl.style.display = 'block';
+                    history.replaceState(null, '', location.pathname);
+                }
+            } else {
+                oidcBox.style.display = 'none';
+                adminForm.style.display = 'block';
+            }
+            screen.style.display = 'flex';
         }
 
         async function doLogin() {
@@ -734,21 +788,21 @@
             }
         }
 
-        function showAdmin() {
+        function showAdmin(username) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('admin-screen').style.display = 'block';
             document.getElementById('logout-btn').style.display = '';
+            const userEl = document.getElementById('header-user');
+            userEl.textContent = username ? '@' + username : '';
             loadBaseDomain();
             loadPrefs();
             loadDomains();
         }
 
-        function doLogout() {
-            document.cookie = 'certpost_session=; Path=/; Max-Age=0';
-            document.getElementById('admin-screen').style.display = 'none';
-            document.getElementById('logout-btn').style.display = 'none';
-            document.getElementById('login-screen').style.display = '';
-            document.getElementById('login-key').value = '';
+        async function doLogout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            // Reload so the login screen is rebuilt from a fresh auth check.
+            location.href = '/';
         }
 
         function showTab(name) {
