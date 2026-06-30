@@ -1,4 +1,4 @@
-# certpost 1.1.0 Beta 1 - 30 June 2026
+# certpost 1.1.0 - 30 June 2026
 
 Adds OpenID Connect (OIDC) login as an alternative to the shared `admin_key`, so the admin
 panel can delegate authentication to an existing identity provider and gate access to a
@@ -23,8 +23,8 @@ named allow-list of users.
   and an optional `label` for the login button.
 - The login screen shows a "Log in with &lt;label&gt;" button in OIDC mode; once signed
   in, the header shows the logged-in username, and **Logout** clears the session. Sessions
-  are held in memory (so a restart logs everyone out) and carried in a long-lived (one
-  year) `HttpOnly` session cookie, marked `Secure` when the redirect URL is https.
+  are held in memory (so a restart logs everyone out) and carried in a one-month
+  `HttpOnly` session cookie, marked `Secure` when the redirect URL is https.
 - The OIDC backend is stdlib-only (`net/http`), in keeping with the project's
   zero-dependencies stance.
 

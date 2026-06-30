@@ -343,8 +343,8 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sid := s.oidc.StartSession(sess)
-	const oneYear = 365 * 24 * 60 * 60
-	setSessionCookie(w, oidcCookie, sid, oneYear, http.SameSiteLaxMode, s.oidc.RedirectIsHTTPS())
+	const oneMonth = 30 * 24 * 60 * 60
+	setSessionCookie(w, oidcCookie, sid, oneMonth, http.SameSiteLaxMode, s.oidc.RedirectIsHTTPS())
 	logbuf.Log("server", fmt.Sprintf("OIDC login: %s", sess.Username))
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
