@@ -18,7 +18,7 @@ Let's Encrypt certificate manager with DNS-01 challenges, web admin panel, and T
 
 ## Requirements
 
-- Go 1.22+ (for building)
+- Go 1.27.3+ (for building)
 - A supported DNS provider: Cloudflare (API token + zone ID) or Technitium DNS Server (server URL + API token)
 
 ## Building

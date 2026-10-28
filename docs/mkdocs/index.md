@@ -25,7 +25,7 @@ Managing SSL certificates across multiple services is tedious — requesting cer
 
 ## Requirements
 
-- Go 1.22+ (for building from source), or use pre-built binaries
+- Go 1.27.3+ (for building from source), or use pre-built binaries
 - A supported DNS provider: Cloudflare (API token + zone ID) or Technitium DNS Server (server URL + API token)
 
 ## Quick Start

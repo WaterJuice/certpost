@@ -1,3 +1,10 @@
+# certpost 1.2.0 - 28 Oct 2026
+
+- Built with Go 1.27.3 to pick up the fix for the eMudura TLS issue.
+- `go.mod` now requires Go 1.27.3 (was 1.22), so builds from source can't fall back to an
+  older toolchain without the fix. This also brings in Go 1.27's default runtime
+  (`GODEBUG`) settings, including its current TLS defaults.
+
 # certpost 1.1.0 - 30 June 2026
 
 Adds OpenID Connect (OIDC) login as an alternative to the shared `admin_key`, so the admin
